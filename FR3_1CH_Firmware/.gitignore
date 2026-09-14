@@ -1,0 +1,7 @@
+# STM32CubeIDE build output (regenerate by building in the IDE)
+Debug_*/
+Release_*/
+
+# Per-developer debug launch configs - can bake in a machine-specific
+# absolute path (e.g. the ST-Link GDB log file destination)
+*.launch

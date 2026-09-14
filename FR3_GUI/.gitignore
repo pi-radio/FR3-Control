@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Stray logs from ad hoc smoke-testing
+*.log
+
+# Virtual environment
+venv/
+
+# PyInstaller build output (regenerate with `pyinstaller fr3_gui.spec`)
+build/
+dist/
+
+# Stale pre-platformdirs local dev output - the app now writes these under
+# the OS-appropriate user data directory instead (see fr3_gui/paths.py)
+local_settings/
+logs/

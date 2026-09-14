@@ -1,0 +1,64 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt pytest
+      - run: pytest tests/ -q
+        env:
+          QT_QPA_PLATFORM: offscreen
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Oldest widely-available GitHub-hosted Linux runner: an older
+          # glibc here means the resulting binary runs on more distros, not
+          # fewer (a binary linked against a newer glibc than the user has
+          # installed will refuse to run at all). See PACKAGING.md if you
+          # need to support distros even older than this runner's glibc.
+          - os: ubuntu-22.04
+            artifact_name: FR3-Board-Control-Linux
+          - os: windows-latest
+            artifact_name: FR3-Board-Control-Windows
+          - os: macos-13
+            artifact_name: FR3-Board-Control-macOS
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-build.txt
+      - name: Build with PyInstaller
+        run: pyinstaller --noconfirm --clean fr3_gui.spec
+      - name: Zip the build output
+        shell: bash
+        run: |
+          cd dist
+          if [ -d "FR3 Board Control.app" ]; then
+            zip -r "../${{ matrix.artifact_name }}.zip" "FR3 Board Control.app"
+          else
+            zip -r "../${{ matrix.artifact_name }}.zip" "FR3 Board Control"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}.zip
