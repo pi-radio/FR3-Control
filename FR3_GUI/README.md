@@ -337,3 +337,10 @@ dependencies, see **[PACKAGING.md](PACKAGING.md)** — it covers building a
 Windows/Linux/macOS executable with PyInstaller, the automated GitHub
 Actions build for all three platforms, and platform-specific caveats
 (Linux glibc/distro compatibility, unsigned-app warnings on macOS).
+
+If the GUI won't start on Linux, it's almost always one of two known,
+easy, one-time fixes covered there in detail: a missing `libxcb-cursor0`
+(Qt6's platform plugin dependency) or the current user not being in the
+`dialout` group yet (needed to open `/dev/ttyACM*` for the board's serial
+connection) — see **[PACKAGING.md](PACKAGING.md#platform-specific-notes)**
+for the exact commands.

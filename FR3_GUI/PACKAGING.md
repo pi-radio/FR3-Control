@@ -35,9 +35,18 @@ Linux). No further action needed here - just don't reintroduce a
 ## Building locally (whichever OS you're on right now)
 
 ```
+python3 -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt -r requirements-build.txt
 pyinstaller --noconfirm --clean fr3_gui.spec
 ```
+
+**On Debian/Ubuntu, `python3 -m venv venv` can silently create a broken
+venv** - one with `python`/`python3` under `venv/bin/` but no `activate`
+and no `pip`, if the system's venv support isn't installed (Debian splits
+this out from the base Python package). Fix: `sudo apt install
+python3.10-venv` (match the version to your `python3 --version`), delete
+the broken `venv/` folder, and recreate it.
 
 Output:
 - **Windows:** `dist/FR3 Board Control/FR3 Board Control.exe` (zip the whole
@@ -82,7 +91,16 @@ PyInstaller apps in general - code-signing the executable (a paid
 certificate) is the real fix if this becomes a recurring problem for your
 users.
 
-### Linux (different distributions)
+### Linux (different distributions, and CPU architectures)
+CI builds **two separate Linux binaries** - `FR3-Board-Control-Linux-x86_64`
+(on `ubuntu-22.04`) and `FR3-Board-Control-Linux-arm64` (on
+`ubuntu-22.04-arm`, e.g. for Jetson-class ARM boards). These are not
+interchangeable - give a user the one matching their machine's CPU, not
+just its OS. The arm64 job is new and its GitHub-hosted runner
+availability hasn't been exercised yet in this workflow - if it fails to
+even start, GitHub may not offer that runner label for this account/repo
+yet, worth checking the Actions run directly.
+
 The build is done on Ubuntu 22.04 in CI specifically because **a binary
 linked against a newer glibc than the end user has installed will refuse
 to run at all**, while an older-glibc binary runs fine on newer distros
@@ -99,6 +117,18 @@ won't start with an error mentioning `xcb` or a missing `.so`, the fix is
 one line for them to run once, e.g. on Ubuntu/Debian:
 `sudo apt install libxcb-cursor0`, or on Fedora: `sudo dnf install
 xcb-util-cursor`. This can't be bundled into the app itself.
+
+**"Permission denied" opening `/dev/ttyACM0`** (or any `/dev/ttyACM*`) the
+first time a board is plugged in - normal on a fresh Linux install, not a
+bug. Serial devices are owned by the `dialout` group by default, and a
+user account isn't in it until added:
+```
+sudo usermod -a -G dialout $USER
+```
+then either log out and back in, or run `newgrp dialout` in the current
+terminal to pick it up immediately without a full logout. This is a
+one-time-per-machine setup step, same category as the `libxcb-cursor0`
+fix above - can't be bundled into the app either.
 
 For a nicer double-click experience than "unzip and run a binary" (no
 terminal needed, works across distros with even less fuss), consider

@@ -32,7 +32,11 @@ jobs:
           # installed will refuse to run at all). See PACKAGING.md if you
           # need to support distros even older than this runner's glibc.
           - os: ubuntu-22.04
-            artifact_name: FR3-Board-Control-Linux
+            artifact_name: FR3-Board-Control-Linux-x86_64
+          # ARM64 (e.g. Jetson-class boards running Ubuntu) - separate
+          # binary, not interchangeable with the x86_64 one above.
+          - os: ubuntu-22.04-arm
+            artifact_name: FR3-Board-Control-Linux-arm64
           - os: windows-latest
             artifact_name: FR3-Board-Control-Windows
           - os: macos-13
