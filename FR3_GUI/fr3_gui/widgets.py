@@ -99,6 +99,21 @@ class VoltageControl(QWidget):
         self.value_changed.emit(self.spin.value())
 
 
+class SteppedDoubleSpinBox(QDoubleSpinBox):
+    """QDoubleSpinBox variant that emits `stepped` immediately when the
+    value changes via the up/down arrow buttons or arrow keys, as opposed
+    to typing - Qt's stepBy() is the one code path both of those actually
+    go through, and isn't otherwise exposed as its own signal (only the
+    generic valueChanged, which fires just as much while typing digit by
+    digit, and editingFinished, which only fires on Enter/focus-loss)."""
+
+    stepped = Signal()
+
+    def stepBy(self, steps: int) -> None:
+        super().stepBy(steps)
+        self.stepped.emit()
+
+
 class HexSpinBox(QSpinBox):
     """QSpinBox's own hex display (setDisplayIntegerBase(16)) renders
     lowercase (e.g. "0xe") with no way to configure that - override the

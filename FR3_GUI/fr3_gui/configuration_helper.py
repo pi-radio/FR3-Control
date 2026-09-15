@@ -42,11 +42,16 @@ from PySide6.QtWidgets import (
 
 from .am3153_filter import FILTER_BANKS, get_response
 from .local_settings import load_tx_helper_inputs, save_tx_helper_inputs
+from .widgets import SteppedDoubleSpinBox
 from .worker import DeviceWorker
 
-# LMX2820's own valid tuning range (matches firmware's LMX_FREQ_MIN_HZ/MAX_HZ
-# in board_config.h) - a computed LO frequency outside this can't be applied.
-LMX_FREQ_MIN_HZ = 6.0e9
+# Max matches the LMX2820 hardware/firmware's own tuning ceiling
+# (LMX_FREQ_MAX_HZ in board_config.h). Min is a stricter GUI-enforced
+# floor above the hardware's actual 6.0GHz limit - applies to both
+# Internal (auto-tune) and External (informational display) LO, since
+# it's a floor on the requested LO frequency itself, not a chip capability
+# check. A computed LO frequency outside [MIN, MAX] can't be applied.
+LMX_FREQ_MIN_HZ = 7.0e9
 LMX_FREQ_MAX_HZ = 22.6e9
 
 Y_MIN_DB = -50.0
@@ -172,24 +177,27 @@ class ConfigurationHelper(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
 
         form = QFormLayout()
-        self.fr1_spin = QDoubleSpinBox()
+        self.fr1_spin = SteppedDoubleSpinBox()
         self.fr1_spin.setRange(1.0, 4.0)
         self.fr1_spin.setDecimals(3)
         self.fr1_spin.setSuffix(" GHz")
+        self.fr1_spin.setSingleStep(0.5)
         self.fr1_spin.setValue(2.0)
         form.addRow("<b>FR1 Frequency</b>", self.fr1_spin)
 
-        self.fr3_spin = QDoubleSpinBox()
-        self.fr3_spin.setRange(2.0, 27.0)
+        self.fr3_spin = SteppedDoubleSpinBox()
+        self.fr3_spin.setRange(5.5, 27.0)  # 5.5GHz inclusive is the floor
         self.fr3_spin.setDecimals(3)
         self.fr3_spin.setSuffix(" GHz")
+        self.fr3_spin.setSingleStep(0.5)
         self.fr3_spin.setValue(10.0)
         form.addRow("<b>FR3 Frequency</b>", self.fr3_spin)
 
         self.bw_spin = QDoubleSpinBox()
-        self.bw_spin.setRange(0.0, 1.0)
+        self.bw_spin.setRange(0.1, 1.0)
         self.bw_spin.setDecimals(3)
         self.bw_spin.setSuffix(" GHz")
+        self.bw_spin.setSingleStep(0.1)
         self.bw_spin.setValue(0.5)
         form.addRow("<b>Signal Bandwidth</b>", self.bw_spin)
 
@@ -216,6 +224,13 @@ class ConfigurationHelper(QWidget):
             self.fr3_spin.setValue(saved_inputs[1])
             self.bw_spin.setValue(saved_inputs[2])
 
+        # Seeded from whatever FR1/FR3 end up showing at startup (default or
+        # restored above) - _on_fr1_fr3_committed() keeps this in sync with
+        # the last combination that actually produced a valid LO frequency,
+        # so an invalid attempt has something concrete to snap back to.
+        self._last_valid_fr1_ghz = self.fr1_spin.value()
+        self._last_valid_fr3_ghz = self.fr3_spin.value()
+
         self.lo_status_label = QLabel()
         self.lo_status_label.setStyleSheet("color: gray;")
         outer.addWidget(self.lo_status_label)
@@ -226,8 +241,15 @@ class ConfigurationHelper(QWidget):
         self.fr1_spin.valueChanged.connect(self._save_inputs)
         self.fr3_spin.valueChanged.connect(self._save_inputs)
         self.bw_spin.valueChanged.connect(self._save_inputs)
-        self.fr1_spin.editingFinished.connect(self._apply_lo_frequency)
-        self.fr3_spin.editingFinished.connect(self._apply_lo_frequency)
+        # editingFinished (typing, then Enter/focus-loss) and stepped
+        # (arrow buttons/keys, applied immediately rather than waiting for
+        # focus-loss) both retune - covering every way to change the value.
+        # valueChanged alone would also fire, and retune, on every digit
+        # while still typing a number.
+        self.fr1_spin.editingFinished.connect(self._on_fr1_fr3_committed)
+        self.fr3_spin.editingFinished.connect(self._on_fr1_fr3_committed)
+        self.fr1_spin.stepped.connect(self._on_fr1_fr3_committed)
+        self.fr3_spin.stepped.connect(self._on_fr1_fr3_committed)
         self.upper_sideband_radio.toggled.connect(self._on_sideband_toggled)
         self._lo_int_radio.toggled.connect(self._on_lo_source_changed)
 
@@ -305,6 +327,24 @@ class ConfigurationHelper(QWidget):
             return fr3_hz - fr1_hz
         return fr3_hz + fr1_hz
 
+    def _is_configuration_valid(self) -> bool:
+        """False when the current FR1/FR3/sideband combination would
+        require the LMX2820 to tune outside its valid range - the graph
+        and filter suggestion freeze on the last valid configuration
+        rather than plotting/scoring a frequency the hardware could never
+        actually be at."""
+        return LMX_FREQ_MIN_HZ <= self._compute_required_lo_hz() <= LMX_FREQ_MAX_HZ
+
+    def _compute_alternate_sideband_lo_hz(self) -> float:
+        """What _compute_required_lo_hz() would return with the sideband
+        flipped - used to suggest a fix when the current sideband puts the
+        required LO out of range."""
+        fr1_hz = self.fr1_spin.value() * 1e9
+        fr3_hz = self.fr3_spin.value() * 1e9
+        if self.upper_sideband_radio.isChecked():
+            return fr3_hz + fr1_hz
+        return fr3_hz - fr1_hz
+
     def _apply_lo_frequency(self) -> None:
         """Tunes the LMX2820 per FR1/FR3/sideband. Only with the internal
         LO, and never during snapshot restore (that's the board's own
@@ -313,17 +353,49 @@ class ConfigurationHelper(QWidget):
             return
         lo_hz = self._compute_required_lo_hz()
         if not (LMX_FREQ_MIN_HZ <= lo_hz <= LMX_FREQ_MAX_HZ):
-            self.lo_status_label.setText(
-                f"Required LO frequency ({lo_hz / 1e9:.6f} GHz) is outside the "
-                f"LMX2820's {LMX_FREQ_MIN_HZ / 1e9:.1f}-{LMX_FREQ_MAX_HZ / 1e9:.1f}GHz "
-                f"range - not applied."
+            sideband_name = "Upper" if self.upper_sideband_radio.isChecked() else "Lower"
+            # lo_status_label auto-detects HTML (same as the <b> labels
+            # used throughout this file's QFormLayout rows) - no explicit
+            # setTextFormat() needed for the bold section headers below.
+            message = (
+                f"<b>Requested:</b> FR1: {self.fr1_spin.value():.6f} GHz, "
+                f"FR3: {self.fr3_spin.value():.6f} GHz, Sideband: {sideband_name}. "
+                f"<b>Error:</b> The required LO frequency ({lo_hz / 1e9:.6f} GHz) is "
+                f"outside the LMX2820's {LMX_FREQ_MIN_HZ / 1e9:.1f}-"
+                f"{LMX_FREQ_MAX_HZ / 1e9:.1f}GHz range - not applied."
             )
+            alt_lo_hz = self._compute_alternate_sideband_lo_hz()
+            if LMX_FREQ_MIN_HZ <= alt_lo_hz <= LMX_FREQ_MAX_HZ:
+                alt_name = "lower" if self.upper_sideband_radio.isChecked() else "upper"
+                message += (
+                    f" <b>Solution:</b> Try using the {alt_name} sideband instead "
+                    f"(the required LO will be {alt_lo_hz / 1e9:.6f} GHz)."
+                )
+            self.lo_status_label.setText(message)
             return
         self._worker.submit("lmx_tune", lo_hz)
         self._set_freq_display(lo_hz / 1e9)
         self.lo_status_label.setText(f"LO Frequency: {lo_hz / 1e9:.6f} GHz (applied)")
         if self._on_lo_tuned is not None:
             self._on_lo_tuned()
+
+    def _on_fr1_fr3_committed(self) -> None:
+        """FR1 or FR3 was just committed - typed then Enter/focus-loss, or
+        an arrow button/key nudge (see the editingFinished/stepped wiring
+        above). _apply_lo_frequency() still runs first so its usual
+        out-of-range message (Internal LO) is based on the value actually
+        just entered. But an invalid combination must not just go
+        un-applied - it also can't be left sitting in the box looking like
+        it took effect, so FR1/FR3 snap back to the last valid combination
+        afterward. Only a genuinely valid combination updates that
+        fallback in the first place."""
+        self._apply_lo_frequency()
+        if self._is_configuration_valid():
+            self._last_valid_fr1_ghz = self.fr1_spin.value()
+            self._last_valid_fr3_ghz = self.fr3_spin.value()
+        else:
+            self.fr1_spin.setValue(self._last_valid_fr1_ghz)
+            self.fr3_spin.setValue(self._last_valid_fr3_ghz)
 
     def _on_sideband_toggled(self, upper_checked: bool) -> None:
         # Sideband flips which frequency is desired vs. undesired, so it
@@ -332,6 +404,33 @@ class ConfigurationHelper(QWidget):
             self._on_scoring_input_changed()
         self._update_external_lo_display()
         if self._is_populating():
+            return
+        if not self._is_configuration_valid():
+            # This sideband would put the required LO out of range - must
+            # not reach the hardware at all (previously, set_iq_swap was
+            # sent unconditionally here, before this check, applying the
+            # rejected sideband to the board's actual IQ swap state even
+            # though the LMX2820 correctly refused to retune - a real
+            # GUI/hardware mismatch). The radio also snaps back to its
+            # previous selection instead of looking like the change took.
+            # _apply_lo_frequency() still shows its usual out-of-range
+            # message (Internal LO) for the sideband just rejected -
+            # preserved across the revert below rather than letting the
+            # resulting re-sync silently overwrite it.
+            self._apply_lo_frequency()
+            rejection_message = self.lo_status_label.text()
+            self.upper_sideband_radio.blockSignals(True)
+            self.lower_sideband_radio.blockSignals(True)
+            try:
+                self.upper_sideband_radio.setChecked(not upper_checked)
+                self.lower_sideband_radio.setChecked(upper_checked)
+            finally:
+                self.upper_sideband_radio.blockSignals(False)
+                self.lower_sideband_radio.blockSignals(False)
+            if self._has_rf_filters:
+                self._on_scoring_input_changed()
+            self._update_external_lo_display()
+            self.lo_status_label.setText(rejection_message)
             return
         self._worker.submit("set_iq_swap", not upper_checked)
         self._apply_lo_frequency()
@@ -418,6 +517,11 @@ class ConfigurationHelper(QWidget):
         return desired_power, filter_only_rejection_db + BASELINE_SUPPRESSION_DB
 
     def _redraw(self) -> None:
+        if not self._is_configuration_valid():
+            # Leave whatever was last plotted for a valid configuration on
+            # screen, rather than drawing a frequency the LMX2820 could
+            # never actually be tuned to.
+            return
         self.plot.clear()
 
         f_lo_hz = self._compute_required_lo_hz()
@@ -479,6 +583,11 @@ class ConfigurationHelper(QWidget):
         Picks the one with the most desired sideband energy among those
         reaching MIN_REJECTION_DB, or the highest-rejection one if none
         qualify. LO leakage is not part of this scoring."""
+        if not self._is_configuration_valid():
+            # Freeze on the last suggestion made for a valid configuration
+            # rather than scoring filters against a frequency the LMX2820
+            # could never actually be tuned to.
+            return
         candidates = []
         for _, bank_nibble in FILTER_BANKS:
             if bank_nibble == 0x0:  # Bypass excluded
