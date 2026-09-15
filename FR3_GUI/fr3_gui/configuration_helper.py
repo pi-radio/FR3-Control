@@ -397,6 +397,39 @@ class ConfigurationHelper(QWidget):
             self.fr1_spin.setValue(self._last_valid_fr1_ghz)
             self.fr3_spin.setValue(self._last_valid_fr3_ghz)
 
+    def check_recipe_matches_device(self, actual_lmx_freq_hz: float) -> None:
+        """Called once after the board's snapshot arrives. Unlike every
+        other value here, FR1/FR3/bandwidth are a per-machine local
+        convenience (local_settings.py) - never read back from the device
+        itself. If this board was last configured from a different
+        machine (or a different local settings file on this one), FR1/FR3
+        can silently disagree with the LMX2820's actual last-tuned
+        frequency - warn rather than let a later small nudge jump the LO
+        somewhere unexpected. Only meaningful with the internal LO
+        actually in use; sideband itself is always hardware-restored
+        separately (see device_tab.py's _apply_snapshot), so it's never
+        the mismatched part."""
+        if not self._lo_int_radio.isChecked():
+            return
+        expected_lo_hz = self._compute_required_lo_hz()
+        if abs(expected_lo_hz - actual_lmx_freq_hz) < 1.0:
+            return
+        # Styled inline (a <span>, not lo_status_label's own stylesheet) so
+        # the red/bold is scoped to just this message - a later normal
+        # status update (plain setText()) isn't left stuck looking like a
+        # warning.
+        self.lo_status_label.setText(
+            '<span style="color:#c00000; font-weight:bold;">'
+            f"Warning: The FR1/FR3 values shown here "
+            f"({self.fr1_spin.value():.6f} GHz / {self.fr3_spin.value():.6f} GHz) "
+            f"don't match the LMX2820's actual last-tuned frequency "
+            f"({actual_lmx_freq_hz / 1e9:.6f} GHz) - this board was likely last "
+            f"configured from a different machine. Re-enter the correct FR1/FR3 "
+            f"before making further adjustments, or the LO could jump somewhere "
+            f"unexpected."
+            "</span>"
+        )
+
     def _on_sideband_toggled(self, upper_checked: bool) -> None:
         # Sideband flips which frequency is desired vs. undesired, so it
         # affects the filter score just as much as fr1/fr3/bw do.

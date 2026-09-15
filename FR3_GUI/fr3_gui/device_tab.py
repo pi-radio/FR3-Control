@@ -637,6 +637,11 @@ class DeviceTab(QWidget):
             if "iq_swap" in values:
                 self.configuration_helper.lower_sideband_radio.setChecked(values["iq_swap"])
                 self.configuration_helper.upper_sideband_radio.setChecked(not values["iq_swap"])
+            if "lmx_freq_hz" in values and self._caps.has_iq_swap and self._caps.has_lo_switch:
+                # FR1/FR3 are this machine's local cache (local_settings.py),
+                # never read back from the device - warn if they don't
+                # actually explain the frequency just restored above.
+                self.configuration_helper.check_recipe_matches_device(values["lmx_freq_hz"])
             if "tx_filter" in values:
                 self.tx_filter_control.set_value(values["tx_filter"])
                 self.configuration_helper.seed_display_filter(values["tx_filter"])
