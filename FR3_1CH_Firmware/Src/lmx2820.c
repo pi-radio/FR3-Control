@@ -69,6 +69,12 @@
 #define LMX2820_LOCK_POLL_ATTEMPTS 20U
 #define LMX2820_LOCK_POLL_DELAY_MS 1U
 
+/* Cold-boot calibration is attempt-count-dependent (see LMX2820_Tune()) -
+ * retries the full RESET+settle+write+poll sequence this many times before
+ * giving up, so an automatic boot-time restore (no user watching to retry
+ * it manually) doesn't stay silently unlocked after one unlucky attempt. */
+#define LMX2820_COLD_BOOT_RETRY_ATTEMPTS 3U
+
 /* Every register except PLL_N, PLL_DEN, PLL_NUM, INSTCAL_PLL_NUM,
  * OUTA_MUX/PD, and OUTA_PWR is constant across the full 6-22.6GHz range.
  * Those 9 frequency-dependent slots are overwritten by LMX2820_Tune()
@@ -259,23 +265,17 @@ bool LMX2820_Tune(uint64_t freq_hz)
   lmx2820_dbg_cs_high_cycles = 0U;
   start_cycles = DWT->CYCCNT;
 
+  bool locked;
+
   if (!lmx2820_initialized)
   {
-    /* First tune since power-on/reset: write all 123 registers once so
-     * every constant register is correct regardless of POR state. R122
-     * down to R0, R0 last - FCAL_EN calibration (triggered by writing R0)
-     * must see every other register already staged. */
+    /* First tune since power-on/reset: write all 123 registers so every
+     * constant register is correct regardless of POR state. R122 down to
+     * R0, R0 last - FCAL_EN calibration (triggered by writing R0) must see
+     * every other register already staged. */
     uint16_t regs[LMX2820_REG_COUNT];
     int32_t addr;
-
-    /* Per datasheet Section 8.3 step 3: toggle R0's RESET bit (bit 1)
-     * 1->0 before loading the rest, forcing internal state to a known
-     * baseline - distinct from the FCAL_EN calibration trigger below.
-     * Needed because cold-boot lock is attempt-count-dependent (attempt #1
-     * fails, #2 locks, #3+ fail again) regardless of added delay - state,
-     * not timing. */
-    LMX2820_WriteRegister(0U, 0x0002U); /* RESET = 1 */
-    LMX2820_WriteRegister(0U, 0x0000U); /* RESET = 0 */
+    uint32_t attempt;
 
     memcpy(regs, lmx2820_template, sizeof(regs));
     regs[LMX2820_REG_PLL_N] = pll_n;
@@ -289,22 +289,46 @@ bool LMX2820_Tune(uint64_t freq_hz)
     regs[LMX2820_REG_OUTA_PWR] = (uint16_t)(LMX2820_OUTA_PWR_BASE | ((lmx2820_current_power & 0x07U) << 1));
     regs[0] = r0_value;
 
-    /* Cold power-up settling delay - the chip needs time to accept
-     * register writes after power-up, not just before calibration. */
-    HAL_Delay(500U);
-
-    for (addr = (int32_t)LMX2820_REG_COUNT - 1; addr >= 0; addr--)
+    locked = false;
+    for (attempt = 0U; (attempt < LMX2820_COLD_BOOT_RETRY_ATTEMPTS) && !locked; attempt++)
     {
-      LMX2820_WriteRegister((uint8_t)addr, regs[addr]);
-    }
+      /* Per datasheet Section 8.3 step 3: toggle R0's RESET bit (bit 1)
+       * 1->0 before loading the rest, forcing internal state to a known
+       * baseline - distinct from the FCAL_EN calibration trigger below.
+       * Needed because cold-boot lock is attempt-count-dependent (attempt #1
+       * fails, #2 locks, #3+ fail again) regardless of added delay - state,
+       * not timing. Retried here, not just left to the caller, because the
+       * automatic boot-time restore (Settings_Init()) only ever calls this
+       * once with no user watching to retry it manually - seen in practice
+       * failing to lock after a brief power glitch (e.g. a USB hub
+       * power-cycling its downstream port on a host reconnect) even though
+       * a fully clean power-on reliably locks on the first attempt. */
+      LMX2820_WriteRegister(0U, 0x0002U); /* RESET = 1 */
+      LMX2820_WriteRegister(0U, 0x0000U); /* RESET = 0 */
 
-    LMX2820_WriteRegister(0U, regs[0]);
+      /* Cold power-up settling delay - the chip needs time to accept
+       * register writes after power-up, not just before calibration.
+       * Repeated on every retry too - harmless, and cheap next to the
+       * cost of leaving the board silently unlocked. */
+      HAL_Delay(500U);
+
+      for (addr = (int32_t)LMX2820_REG_COUNT - 1; addr >= 0; addr--)
+      {
+        LMX2820_WriteRegister((uint8_t)addr, regs[addr]);
+      }
+
+      LMX2820_WriteRegister(0U, regs[0]);
+
+      locked = LMX2820_PollLock();
+    }
   }
   else
   {
     /* Warm retune: only registers that change with frequency/mode, plus R0
      * last (triggers FCAL_EN calibration). OUTA_PWR is excluded - it only
-     * depends on power level, already correct from init or LMX_PWR. */
+     * depends on power level, already correct from init or LMX_PWR. Not
+     * retried - the attempt-count-dependent flakiness above is specifically
+     * a cold-boot/reset behavior, not seen on ordinary retunes. */
     LMX2820_WriteRegister(LMX2820_REG_OUTA_MUX_PD, outa_mux_pd);
     LMX2820_WriteRegister(LMX2820_REG_INSTCAL_LO, (uint16_t)(instcal_num & 0xFFFFU));
     LMX2820_WriteRegister(LMX2820_REG_INSTCAL_HI, (uint16_t)(instcal_num >> 16));
@@ -314,6 +338,8 @@ bool LMX2820_Tune(uint64_t freq_hz)
     LMX2820_WriteRegister(LMX2820_REG_PLL_DEN_HI, (uint16_t)(LMX2820_PLL_DEN >> 16));
     LMX2820_WriteRegister(LMX2820_REG_PLL_N, pll_n);
     LMX2820_WriteRegister(0U, r0_value);
+
+    locked = LMX2820_PollLock();
   }
 
   end_cycles = DWT->CYCCNT;
@@ -322,20 +348,16 @@ bool LMX2820_Tune(uint64_t freq_hz)
   lmx2820_current_freq_hz = freq_hz;
   lmx2820_current_mux = mux;
 
+  /* Only latch lmx2820_initialized once a full write has actually locked -
+   * otherwise a failed cold-boot calibration would stick on the abbreviated
+   * warm-retune path forever, missing the reset/delay/full rewrite a real
+   * calibration needs. */
+  if (locked)
   {
-    /* Only latch lmx2820_initialized once a full write has actually
-     * locked - otherwise a failed first calibration would stick on the
-     * abbreviated warm-retune path forever, missing the reset/delay/full
-     * rewrite a real calibration needs. */
-    bool locked = LMX2820_PollLock();
-
-    if (locked)
-    {
-      lmx2820_initialized = true;
-    }
-
-    return locked;
+    lmx2820_initialized = true;
   }
+
+  return locked;
 }
 
 void LMX2820_SetPower(uint8_t power)

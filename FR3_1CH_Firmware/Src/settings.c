@@ -241,14 +241,23 @@ void Settings_Init(void)
 #endif
 
 #if BOARD_HAS_LMX2820
-  /* Tune first, unconditionally (leaves the chip powered up/unmuted),
-     then mute if the persisted state was muted. Muting before tuning
-     would power down and mark uninitialized, only for the tune to
-     immediately power it back up - undoing the restored mute. No
-     explicit unmute call needed since the tune already leaves it
-     unmuted. */
-  LMX2820_SetPower(settings.lmx_power);
+  /* Tune first, unconditionally - this is the only call that runs the
+     mandatory cold-boot RESET + 500ms settle + full 123-register write,
+     and must be the very first thing to touch the chip after power-up.
+     SetPower() is a single-register write, safe only once that's done;
+     calling it before Tune() (as this used to) hit the chip with a raw
+     SPI write during its power-up transient, before RESET/settling ever
+     happened. Tune()'s own full write uses whatever lmx2820_current_power
+     already is (still the LMX2820_Init() default here, not yet the
+     persisted value), so SetPower() still runs right after to correct it
+     - one extra harmless single-register write, on an already-initialized
+     chip this time.
+     Mute last: muting before tuning would power down and mark
+     uninitialized, only for the tune to immediately power it back up -
+     undoing the restored mute. No explicit unmute call needed since the
+     tune already leaves it unmuted. */
   LMX2820_Tune(settings.lmx_freq_hz);
+  LMX2820_SetPower(settings.lmx_power);
   if (settings.lmx_mute != 0U)
   {
     LMX2820_SetMute(true);

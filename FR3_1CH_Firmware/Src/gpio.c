@@ -52,7 +52,16 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, BUCK_EN_5V3_Pin|BUCK_EN_3V7_Pin|TEST_POINT_1_Pin|TEST_POINT_2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOE, LO_CTRL_3V3_Pin|IQ_SWAP_SW_3V3_Pin|CLK_SEL_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOE, LO_CTRL_3V3_Pin|IQ_SWAP_SW_3V3_Pin, GPIO_PIN_RESET);
+
+  /* CLK_SEL (PE13): 1 = internal 10MHz TCXO, 0 = external SMA reference -
+   * default to internal, not CubeMX's usual all-pins-low default, so a
+   * fresh mass-erase/reflash boots with the on-board TCXO selected rather
+   * than an external reference the user hasn't necessarily connected.
+   * NOTE: this file is CubeMX-generated - regenerating GPIO code from the
+   * .ioc pinout editor will silently revert this. If that happens, also
+   * set PE13's "GPIO Output level" to High in the Device Configurator. */
+  HAL_GPIO_WritePin(GPIOE, CLK_SEL_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, CSb_LMX_3V3_Pin|CSb_LTC2668_3V3_Pin, GPIO_PIN_SET);
