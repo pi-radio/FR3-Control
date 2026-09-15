@@ -47,6 +47,12 @@ LMX2820_LockStatus_t LMX2820_GetLockStatus(void);
  * serial command rather than a live debugger session. */
 uint16_t LMX2820_ReadRegisterRaw(uint8_t addr);
 
+/* Die temperature via R76's rb_TEMP_SENS field (TEMPSENSE_EN is enabled
+ * permanently in the register template - see lmx2820.c). Per datasheet:
+ * +-5C accuracy, 0.6C/code resolution - treat as approximate, not precise
+ * (TI's own E2E forum has an open question on the exact conversion). */
+double LMX2820_GetTemperatureC(void);
+
 /* Microseconds spent writing all 123 registers in the most recent
  * LMX2820_Tune() call (DWT cycle counter) - excludes the lock-detect poll. */
 uint32_t LMX2820_GetLastTuneWriteDurationUs(void);

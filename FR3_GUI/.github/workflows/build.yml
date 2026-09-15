@@ -57,10 +57,10 @@ jobs:
         shell: bash
         run: |
           cd dist
-          if [ -d "FR3 Board Control.app" ]; then
-            zip -r "../${{ matrix.artifact_name }}.zip" "FR3 Board Control.app"
+          if [ -d "FR3-Board-Control.app" ]; then
+            zip -r "../${{ matrix.artifact_name }}.zip" "FR3-Board-Control.app"
           else
-            zip -r "../${{ matrix.artifact_name }}.zip" "FR3 Board Control"
+            zip -r "../${{ matrix.artifact_name }}.zip" "FR3-Board-Control"
           fi
       - uses: actions/upload-artifact@v4
         with:

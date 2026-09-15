@@ -24,7 +24,8 @@ _READ_ALL_LMX_REGS = object()
 
 class DeviceWorker(QThread):
     values_read = Signal(dict)  # one-shot snapshot of every persisted value
-    lock_status_changed = Signal(str)  # 'LOCKED' / 'UNLOCKED' / 'INVALID'
+    lock_status_changed = Signal(str)  # 'LOCKED' / 'UNLOCKED'
+    lmx_temperature_changed = Signal(float)  # degrees C, polled alongside lock status
     command_result = Signal(str, bool)  # (method_name, success) for SET-style calls
     command_error = Signal(str)  # human-readable I/O/timeout error
     connection_lost = Signal()
@@ -104,12 +105,14 @@ class DeviceWorker(QThread):
             if self._caps.has_lmx2820 and now >= next_lock_poll:
                 try:
                     status = self._device.get_lmx_lock()
+                    temperature_c = self._device.get_lmx_temperature_c()
                 except DeviceError as exc:
                     logger.warning("%s: lock poll failed: %s", self._device.port_name, exc)
                     self.command_error.emit(str(exc))
                     self.connection_lost.emit()
                     break
                 self.lock_status_changed.emit(status)
+                self.lmx_temperature_changed.emit(temperature_c)
                 next_lock_poll = now + LOCK_POLL_INTERVAL_S
 
         logger.info("Worker stopping for %s", self._device.port_name)
@@ -124,6 +127,7 @@ class DeviceWorker(QThread):
             values["lmx_power"] = self._device.get_lmx_power()
             values["lmx_mute"] = self._device.get_lmx_mute()
             values["lmx_lock"] = self._device.get_lmx_lock()
+            values["lmx_temperature_c"] = self._device.get_lmx_temperature_c()
         if caps.has_ltc2668:
             values["i_v"] = self._device.get_i_v()
             values["q_v"] = self._device.get_q_v()

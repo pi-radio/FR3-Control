@@ -96,6 +96,7 @@ class DeviceTab(QWidget):
         self.worker = DeviceWorker(info.device, info.capabilities)
         self.worker.values_read.connect(self._apply_snapshot)
         self.worker.lock_status_changed.connect(self._update_lock_status)
+        self.worker.lmx_temperature_changed.connect(self._update_lmx_temperature)
         self.worker.command_error.connect(self._show_error)
         self.worker.connection_lost.connect(self._on_connection_lost)
         self.worker.start()
@@ -265,7 +266,7 @@ class DeviceTab(QWidget):
     def _build_configuration_helper_section(self) -> QWidget:
         section, layout = self._build_section("Configuration Helper")
         self.configuration_helper = ConfigurationHelper(
-            self.freq_spin, self.lo_int_radio, self.external_lo_spin,
+            self._set_freq_display, self.lo_int_radio, self.external_lo_value_label,
             self.worker, self.tab_key, self._caps.has_rf_filters,
             is_populating=lambda: self._populating,
             on_lo_tuned=self._maybe_auto_suggest_iv_qv if self._caps.has_ltc2668 else None,
@@ -293,21 +294,25 @@ class DeviceTab(QWidget):
         self.lmx_group = group
         form = QFormLayout(group)
 
-        self.freq_spin = QDoubleSpinBox()
-        self.freq_spin.setRange(6.0, 22.6)
-        self.freq_spin.setDecimals(6)
-        self.freq_spin.setSuffix(" GHz")
-        self.freq_spin.setSingleStep(0.001)
+        self._freq_ghz = 6.0
         if self._caps.has_iq_swap:
             # Configuration Helper computes and applies this instead - a
-            # read-only display here, not something to type into directly.
-            self.freq_spin.setEnabled(False)
+            # plain read-only display here (no white box - matches
+            # "Desired External LO Frequency" under LO Source), not
+            # something to type into directly.
+            self.freq_spin = None
+            self.freq_display_label = QLabel("6.000000 GHz")
+            form.addRow("<b>Frequency</b>", self.freq_display_label)
         else:
             # No Configuration Helper on this board - directly tunable.
+            self.freq_spin = QDoubleSpinBox()
+            self.freq_spin.setRange(6.0, 22.6)
+            self.freq_spin.setDecimals(6)
+            self.freq_spin.setSuffix(" GHz")
+            self.freq_spin.setSingleStep(0.001)
             # editingFinished fires on Enter or focus loss - no Tune button.
             self.freq_spin.editingFinished.connect(self._tune_clicked)
-
-        form.addRow("<b>Frequency</b>", self.freq_spin)
+            form.addRow("<b>Frequency</b>", self.freq_spin)
 
         self.power_spin = QSpinBox()
         self.power_spin.setRange(0, 7)
@@ -333,6 +338,13 @@ class DeviceTab(QWidget):
         self.lock_label.setStyleSheet("font-weight: bold;")
         form.addRow("<b>Lock status</b>", self.lock_label)
 
+        self.temp_label = QLabel("—")
+        self.temp_label.setToolTip(
+            "Approximate - LMX2820's own sensor is accurate to only "
+            "±5°C per datasheet (see README.md Section 6)."
+        )
+        form.addRow("<b>Temperature</b>", self.temp_label)
+
         registers_button = QPushButton("Read LMX Registers...")
         registers_button.setAutoDefault(False)
         registers_button.setDefault(False)
@@ -340,6 +352,23 @@ class DeviceTab(QWidget):
         form.addRow("", registers_button)
 
         return group
+
+    def _set_freq_display(self, freq_ghz: float) -> None:
+        """Single writer for the LMX2820 'Frequency' display - the
+        read-only label (Configuration Helper present) or the directly
+        tunable spin box (no Configuration Helper on this board). Also
+        keeps _freq_ghz in sync for _get_freq_ghz()'s sake, since the
+        label case has no .value() to read back."""
+        self._freq_ghz = freq_ghz
+        if self._caps.has_iq_swap:
+            self.freq_display_label.setText(f"{freq_ghz:.6f} GHz")
+        else:
+            self.freq_spin.setValue(freq_ghz)
+
+    def _get_freq_ghz(self) -> float:
+        if self._caps.has_iq_swap:
+            return self._freq_ghz
+        return self.freq_spin.value()
 
     def _open_register_dialog(self) -> None:
         if self._register_dialog is None:
@@ -373,6 +402,9 @@ class DeviceTab(QWidget):
         self.lock_label.setText(status)
         color = LOCK_COLORS.get(status, "black")
         self.lock_label.setStyleSheet(f"font-weight: bold; color: {color};")
+
+    def _update_lmx_temperature(self, temperature_c: float) -> None:
+        self.temp_label.setText(f"{temperature_c:.1f} °C")
 
     # ---- LTC2668 ----
 
@@ -413,7 +445,11 @@ class DeviceTab(QWidget):
 
         # Re-applies the suggestion whenever the LO is actually retuned, so
         # "automatic" mode doesn't go stale after the user changes frequency.
-        self.freq_spin.editingFinished.connect(self._maybe_auto_suggest_iv_qv)
+        # Only wired when freq_spin is the directly-tunable spin box (no
+        # Configuration Helper) - with one, its own on_lo_tuned callback
+        # already covers this after every auto-tune.
+        if not self._caps.has_iq_swap:
+            self.freq_spin.editingFinished.connect(self._maybe_auto_suggest_iv_qv)
 
         self._suppress_iv_qv_label_update = False
         self.i_v_control.value_changed.connect(self._on_iv_qv_manually_changed)
@@ -451,7 +487,7 @@ class DeviceTab(QWidget):
         """Only meaningful with the internal LMX2820 (button is disabled
         otherwise - see _lo_changed). Below the calibration table's range,
         suggest_iv_qv() returns None and I_V/Q_V are left untouched."""
-        freq_ghz = self.freq_spin.value()
+        freq_ghz = self._get_freq_ghz()
         suggestion = suggest_iv_qv(freq_ghz)
         if suggestion is None:
             self.suggest_iv_qv_result_label.setText("Use High-side LO and Lower Sideband")
@@ -489,16 +525,15 @@ class DeviceTab(QWidget):
         layout.addWidget(self.lo_ext_radio)
 
         layout.addSpacing(20)
-        self.external_lo_label = QLabel("External LO Frequency:")
+        self.external_lo_label = QLabel("Desired External LO Frequency:")
         layout.addWidget(self.external_lo_label)
-        self.external_lo_spin = QDoubleSpinBox()
-        self.external_lo_spin.setRange(6.0, 26.5)
-        self.external_lo_spin.setDecimals(6)
-        self.external_lo_spin.setSuffix(" GHz")
-        self.external_lo_spin.setValue(10.0)
-        self.external_lo_spin.setEnabled(False)  # Internal is the typical default state
-        self.external_lo_label.setEnabled(False)
-        layout.addWidget(self.external_lo_spin)
+        # Plain text, not an editable control - computed by
+        # ConfigurationHelper from FR1/FR3/sideband, not an independent
+        # input; this just tells the user what to feed in.
+        self.external_lo_value_label = QLabel("10.000000 GHz")
+        self.external_lo_value_label.setEnabled(False)
+        self.external_lo_label.setEnabled(False)  # Internal is the typical default state
+        layout.addWidget(self.external_lo_value_label)
 
         layout.addStretch(1)
         return group
@@ -516,7 +551,7 @@ class DeviceTab(QWidget):
         # reflected immediately without waiting for the user to touch it.
         self.lmx_group.setEnabled(checked)
         self.clock_group.setEnabled(checked)
-        self.external_lo_spin.setEnabled(not checked)
+        self.external_lo_value_label.setEnabled(not checked)
         self.external_lo_label.setEnabled(not checked)
         # Suggest/auto I_V-Q_V calibrate out the internal LMX2820's own LO
         # leakage - meaningless (and disabled) with an external LO in use.
@@ -578,7 +613,7 @@ class DeviceTab(QWidget):
         self._populating = True
         try:
             if "lmx_freq_hz" in values:
-                self.freq_spin.setValue(values["lmx_freq_hz"] / 1e9)
+                self._set_freq_display(values["lmx_freq_hz"] / 1e9)
             if "lmx_power" in values:
                 self.power_spin.setValue(values["lmx_power"])
             if "lmx_mute" in values:
@@ -587,6 +622,8 @@ class DeviceTab(QWidget):
                 self.power_off_radio.setChecked(is_muted)
             if "lmx_lock" in values:
                 self._update_lock_status(values["lmx_lock"])
+            if "lmx_temperature_c" in values:
+                self._update_lmx_temperature(values["lmx_temperature_c"])
             if "i_v" in values:
                 self.i_v_control.set_value(values["i_v"])
             if "q_v" in values:

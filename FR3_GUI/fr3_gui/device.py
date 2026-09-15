@@ -117,8 +117,16 @@ class Device:
         return self._query("LMX MUTE?") == "ON"
 
     def get_lmx_lock(self) -> str:
-        """Returns 'LOCKED', 'UNLOCKED', or 'INVALID'."""
+        """Returns 'LOCKED' or 'UNLOCKED' - the firmware collapses the
+        LMX2820's own rb_LD==0b11 "invalid" readback (e.g. seen with
+        External clock selected and nothing actually connected) into
+        UNLOCKED before it ever reaches this command."""
         return self._query("LMX LOCK?")
+
+    def get_lmx_temperature_c(self) -> float:
+        """Die temperature from the LMX2820's own sensor - approximate
+        (+-5C per datasheet), see Section 6 of README.md."""
+        return float(self._query("LMX TEMP?"))
 
     def read_lmx_register(self, addr: int) -> int:
         """Raw single-register readback (debug/bring-up command), addr 0-122."""

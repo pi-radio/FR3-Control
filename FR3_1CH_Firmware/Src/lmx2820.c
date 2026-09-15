@@ -27,6 +27,7 @@
 #define LMX2820_REG_OUTA_MUX_PD   78U
 #define LMX2820_REG_OUTA_PWR      79U
 #define LMX2820_REG_LOCK_READBACK 74U
+#define LMX2820_REG_TEMP_READBACK 76U
 
 #define LMX2820_OUTA_PD_BIT       0x10U
 #define LMX2820_OUTA_PWR_BASE     0x0110U
@@ -52,6 +53,19 @@
 #define LMX2820_RB_LD_SHIFT       14U
 #define LMX2820_RB_LD_LOCKED      0x0002U
 
+/* R19 bits [4:3]: TEMPSENSE_EN (00 = disabled/POR default, 11 = enabled,
+ * 01/10 reserved). Template's R19 below (0x2138) has this baked in as
+ * permanently enabled - like every other non-frequency-dependent
+ * register, it's just always set correctly rather than written separately
+ * at read time. */
+
+/* rb_TEMP_SENS via R76 is an 11-bit field at bits [10:0]. Datasheet:
+ * Temp_C = 0.85 * code - 415, resolution 0.6C/code, accuracy +-5C. TI has
+ * acknowledged on their own E2E forum that this doesn't perfectly match
+ * their characterization graph, so treat the result as approximate within
+ * that +-5C spec rather than precise. */
+#define LMX2820_RB_TEMP_SENS_MASK 0x07FFU
+
 #define LMX2820_LOCK_POLL_ATTEMPTS 20U
 #define LMX2820_LOCK_POLL_DELAY_MS 1U
 
@@ -65,7 +79,7 @@ static const uint16_t lmx2820_template[LMX2820_REG_COUNT] =
   /* R4  */ 0x4204, /* R5  */ 0x0032, /* R6  */ 0x0A43, /* R7  */ 0x0000,
   /* R8  */ 0xC802, /* R9  */ 0x0005, /* R10 */ 0x0000, /* R11 */ 0x0612,
   /* R12 */ 0x0408, /* R13 */ 0x0038, /* R14 */ 0x3001, /* R15 */ 0x2001,
-  /* R16 */ 0x171E, /* R17 */ 0x15C0, /* R18 */ 0x0000, /* R19 */ 0x2120,
+  /* R16 */ 0x171E, /* R17 */ 0x15C0, /* R18 */ 0x0000, /* R19 */ 0x2138,
   /* R20 */ 0x272C, /* R21 */ 0x1C64, /* R22 */ 0xE2BF, /* R23 */ 0x1102,
   /* R24 */ 0x0E34, /* R25 */ 0x0624, /* R26 */ 0x0DB0, /* R27 */ 0x8001,
   /* R28 */ 0x0639, /* R29 */ 0x318C, /* R30 */ 0xB18C, /* R31 */ 0x0401,
@@ -383,6 +397,14 @@ LMX2820_LockStatus_t LMX2820_GetLockStatus(void)
     return LMX2820_LOCK_INVALID;
   }
   return LMX2820_LOCK_UNLOCKED;
+}
+
+double LMX2820_GetTemperatureC(void)
+{
+  uint16_t readback = LMX2820_ReadRegister(LMX2820_REG_TEMP_READBACK);
+  uint16_t code = (uint16_t)(readback & LMX2820_RB_TEMP_SENS_MASK);
+
+  return (0.85 * (double)code) - 415.0;
 }
 
 uint32_t LMX2820_GetLastTuneWriteDurationUs(void)

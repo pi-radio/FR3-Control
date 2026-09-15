@@ -11,7 +11,7 @@ from pathlib import Path
 
 from platformdirs import user_data_dir
 
-APP_NAME = "FR3 Board Control"
+APP_NAME = "FR3-Board-Control"
 
 
 def app_data_dir() -> Path:

@@ -49,12 +49,12 @@ python3.10-venv` (match the version to your `python3 --version`), delete
 the broken `venv/` folder, and recreate it.
 
 Output:
-- **Windows:** `dist/FR3 Board Control/FR3 Board Control.exe` (zip the whole
-  `FR3 Board Control` folder to share it - the `.exe` alone is not enough,
+- **Windows:** `dist/FR3-Board-Control/FR3-Board-Control.exe` (zip the whole
+  `FR3-Board-Control` folder to share it - the `.exe` alone is not enough,
   it needs the `_internal` folder next to it).
-- **Linux:** `dist/FR3 Board Control/FR3 Board Control` (same - zip the
+- **Linux:** `dist/FR3-Board-Control/FR3-Board-Control` (same - zip the
   whole folder).
-- **macOS:** `dist/FR3 Board Control.app` (a proper double-clickable app
+- **macOS:** `dist/FR3-Board-Control.app` (a proper double-clickable app
   bundle - zip it, or use `ditto -c -k` to make a distributable `.zip` that
   preserves the bundle structure correctly).
 
@@ -142,7 +142,7 @@ downloaded it from the internet (browser, email, Slack, etc.), Gatekeeper
 will refuse to open it with an "Apple could not verify" message.
 Recipients need to either right-click -> Open (and confirm) the first
 time, or you can tell them to run once in Terminal:
-`xattr -cr "/path/to/FR3 Board Control.app"`. Proper code signing
+`xattr -cr "/path/to/FR3-Board-Control.app"`. Proper code signing
 requires an active Apple Developer Program membership ($99/year) and is
 worth doing once this tool has real external users - ask if/when you want
 that set up.

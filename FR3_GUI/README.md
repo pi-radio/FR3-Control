@@ -212,7 +212,8 @@ firmware has no idea any of that reasoning happened.
 | `LMX PWR?` | query | `<0-7>` | — |
 | `LMX MUTE ON` / `LMX MUTE OFF` | set | `OK` / `ERR` | `ON` fully powers the chip down; `OFF` re-tunes it and can take a couple of seconds |
 | `LMX MUTE?` | query | `ON` / `OFF` | — |
-| `LMX LOCK?` | query | `LOCKED` / `UNLOCKED` / `INVALID` | Fresh SPI read every call |
+| `LMX LOCK?` | query | `LOCKED` / `UNLOCKED` | Fresh SPI read every call |
+| `LMX TEMP?` | query | `<decimal, 1 place>` (°C) | Die temperature from the LMX2820's own sensor; approximate, see Section 6 |
 | `LMX REG<n>?` | query | `0x<hex>` | Raw register readback, `n` = 0–122, bring-up/debug only |
 
 ```
@@ -222,6 +223,8 @@ firmware has no idea any of that reasoning happened.
 < 12000000000
 > LMX LOCK?
 < LOCKED
+> LMX TEMP?
+< 42.3
 ```
 
 ### 5.4 LTC2668 I/Q Bias DAC
@@ -306,7 +309,8 @@ data on a small number of samples, or from illustrative reference levels.
 | **AM3153 filter S21 response shown in the Configuration Helper graph** | **Real measured data, but from one filter sample.** | The 49 `.s2p` files are actual network-analyzer sweeps of one AM3153 filter, not simulated or datasheet-typical curves. Unit-to-unit variation between filters is not captured. |
 | **Desired/undesired sideband and LO leakage *levels* drawn in the Configuration Helper graph** | **Illustrative only — not measured amplitudes.** | Their vertical extents (0 to −50dB for desired/LO, −15 to −50dB for undesired) are reference conventions chosen to make the plot readable, not a measurement of your actual signal chain. Only their horizontal (frequency) positions are computed from real inputs. |
 | **Rejection dB figure shown for a filter selection or by "Suggest Filter"** | **Estimate.** | It is the real filter's own measured S21 difference between the desired and undesired sideband frequencies, **plus** a fixed assumed baseline mixer suppression (15dB, matching the graph's illustrative desired/undesired gap) that is not separately measured for your specific mixer. Treat it as a useful ranking between filter choices, not a guaranteed system-level rejection number. The display is also capped at ">50dB" above that threshold, since real filter behavior won't track the measured S-parameter data that precisely at very high rejection. |
-| **LMX lock status** (`LMX LOCK?`) | **Exact.** | A fresh SPI readback of the synthesizer's own lock-detect register, decoded into LOCKED/UNLOCKED/INVALID exactly as TI's register map defines. |
+| **LMX lock status** (`LMX LOCK?`) | **Exact.** | A fresh SPI readback of the synthesizer's own lock-detect register, decoded into LOCKED or UNLOCKED. The register's own rb_LD field actually has a third, "invalid" state (0b11) per TI's register map, but the firmware reports that as UNLOCKED too rather than exposing it as a distinct third value. |
+| **LMX2820 die temperature** (`LMX TEMP?`) | **Estimate — ±5°C per datasheet.** | Computed from a fresh SPI readback of the chip's own `rb_TEMP_SENS` field using TI's published `Temp_C = 0.85 × code − 415` formula (0.6°C/code resolution). TI's own E2E forum has an open, TI-acknowledged discrepancy between this formula and their own characterization data, so treat the displayed value as a rough indicator, not a calibrated measurement. |
 | **Board serial number, filter bit readback, clock/LO/IQ source state** | **Exact.** | All are direct digital readbacks (persisted settings or live GPIO levels), not estimates. |
 
 ---

@@ -49,6 +49,24 @@ static void FormatFixed6(double value, char *out)
            (unsigned long)whole_part, (unsigned long)frac_part);
 }
 
+/* Same newlib-nano float-printf gap as FormatFixed6, just 1 decimal place -
+ * matches the LMX2820 temperature sensor's own ~0.6C/code resolution, no
+ * point printing more precision than the sensor has. out must be >= 16
+ * bytes (whole_part is only ever a few digits, but sized to match
+ * FormatFixed6 and avoid a -Wformat-truncation false positive from GCC
+ * assuming the full unsigned long range). */
+static void FormatFixed1(double value, char *out)
+{
+  int is_negative = (value < 0.0);
+  double abs_value = is_negative ? -value : value;
+  uint32_t scaled = (uint32_t)((abs_value * 10.0) + 0.5);
+  uint32_t whole_part = scaled / 10U;
+  uint32_t frac_part = scaled % 10U;
+
+  snprintf(out, 16, "%s%lu.%01lu", is_negative ? "-" : "",
+           (unsigned long)whole_part, (unsigned long)frac_part);
+}
+
 void Commands_ProcessLine(const char *line, char *response, size_t response_capacity)
 {
   unsigned int tp;
@@ -345,14 +363,24 @@ void Commands_ProcessLine(const char *line, char *response, size_t response_capa
       case LMX2820_LOCK_LOCKED:
         snprintf(response, response_capacity, "LOCKED\r\n");
         break;
+      /* INVALID (rb_LD == 0b11) is real - e.g. genuinely returned when an
+       * External clock source is selected with nothing actually connected -
+       * but reported to the host as UNLOCKED rather than as a distinct
+       * third state, since it isn't actionable any differently. */
       case LMX2820_LOCK_INVALID:
-        snprintf(response, response_capacity, "INVALID\r\n");
-        break;
       case LMX2820_LOCK_UNLOCKED:
       default:
         snprintf(response, response_capacity, "UNLOCKED\r\n");
         break;
     }
+    return;
+  }
+
+  if (strcmp(line, "LMX TEMP?") == 0)
+  {
+    char temp_str[16];
+    FormatFixed1(LMX2820_GetTemperatureC(), temp_str);
+    snprintf(response, response_capacity, "%s\r\n", temp_str);
     return;
   }
 #endif /* BOARD_HAS_LMX2820 */

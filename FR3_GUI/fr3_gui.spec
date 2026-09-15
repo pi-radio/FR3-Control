@@ -4,9 +4,12 @@ does not cross-compile (see PACKAGING.md). Produces a one-directory build
 on every platform (more antivirus/startup-time friendly than one-file, and
 required for a proper macOS .app bundle):
 
-    Windows -> dist/FR3 Board Control/FR3 Board Control.exe
-    Linux   -> dist/FR3 Board Control/FR3 Board Control
-    macOS   -> dist/FR3 Board Control.app
+    Windows -> dist/FR3-Board-Control/FR3-Board-Control.exe
+    Linux   -> dist/FR3-Board-Control/FR3-Board-Control
+    macOS   -> dist/FR3-Board-Control.app
+
+No spaces in the name deliberately - avoids needing to quote the path on
+every Linux/macOS shell command (cd, ./, etc.).
 
 Add an icon later by dropping app.ico (Windows) / app.icns (macOS) next to
 this file - both are picked up automatically if present."""
@@ -14,7 +17,7 @@ this file - both are picked up automatically if present."""
 import sys
 from pathlib import Path
 
-APP_NAME = "FR3 Board Control"
+APP_NAME = "FR3-Board-Control"
 project_root = Path(SPECPATH)
 
 sys.path.insert(0, str(project_root))

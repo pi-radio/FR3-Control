@@ -9,9 +9,12 @@ published via the filter_suggested signal / suggested_bits attribute for
 TX/RX Settings to apply on their own ("Use Suggested Filter") - this widget
 never drives TX/RX filter hardware itself.
 
-With an external LO, FR3 (and its auto-tune) is disabled since there's no
-synthesizer to solve for, but sideband/filter suggestion still work using
-external_lo_spin's value as f_lo.
+FR1, FR3, and sideband are always live inputs, regardless of LO source.
+With the internal LO, they drive the LMX2820 auto-tune as usual. With an
+external LO, there's no synthesizer to solve for - instead, the required
+LO frequency is computed the same way and shown as plain text in
+external_lo_value_label (owned by the LO Source group), telling the user
+what to feed in. It's never itself an independent input.
 
 Sideband/LO levels on the graph are illustrative only; the filter S21 is
 real measured data (am3153_filter.py), plotted raw and normalized.
@@ -136,9 +139,9 @@ class ConfigurationHelper(QWidget):
 
     def __init__(
         self,
-        freq_spin: QDoubleSpinBox,
+        set_freq_display: Callable[[float], None],
         lo_int_radio: QRadioButton,
-        external_lo_spin: QDoubleSpinBox,
+        external_lo_value_label: QLabel,
         worker: DeviceWorker,
         tab_key: str,
         has_rf_filters: bool,
@@ -147,12 +150,17 @@ class ConfigurationHelper(QWidget):
         parent=None,
     ):
         super().__init__(parent)
-        # freq_spin is owned by the LMX2820 group - this section is the only
-        # thing that writes to it (it's a read-only display there); the
-        # other two are owned by the LO Source group and only read here.
-        self._freq_spin = freq_spin
+        # set_freq_display (freq_ghz) writes the LMX2820 group's own
+        # "Frequency" display - owned by the device tab, not this section,
+        # since that board might not even have a Configuration Helper
+        # (freq_spin is then directly tunable instead of a read-only
+        # display, which this section has no business knowing about).
+        # external_lo_value_label is owned by the LO Source group and only
+        # read/written here - a plain, non-interactive label; this section
+        # is the only writer of its text.
+        self._set_freq_display = set_freq_display
         self._lo_int_radio = lo_int_radio
-        self._external_lo_spin = external_lo_spin
+        self._external_lo_value_label = external_lo_value_label
         self._worker = worker
         self._tab_key = tab_key
         self._has_rf_filters = has_rf_filters
@@ -223,13 +231,22 @@ class ConfigurationHelper(QWidget):
         self.upper_sideband_radio.toggled.connect(self._on_sideband_toggled)
         self._lo_int_radio.toggled.connect(self._on_lo_source_changed)
 
+        # external_lo_value_label (owned by the LO Source group) is a plain
+        # text display - keep it live off FR1/FR3/sideband rather than
+        # stuck at whatever it last showed.
+        self.fr1_spin.valueChanged.connect(self._update_external_lo_display)
+        self.fr3_spin.valueChanged.connect(self._update_external_lo_display)
+        self._update_external_lo_display()
+
         if self._has_rf_filters:
             # fr1/fr3/bw feed the filter score directly - re-suggest on
             # change rather than just redrawing, when auto-select is on.
+            # external_lo_value_label needs no listener of its own here -
+            # it's a pure readout of fr1/fr3/sideband now, not an independent
+            # input, so those three already cover it.
             self.fr1_spin.valueChanged.connect(self._on_scoring_input_changed)
             self.fr3_spin.valueChanged.connect(self._on_scoring_input_changed)
             self.bw_spin.valueChanged.connect(self._on_scoring_input_changed)
-            self._external_lo_spin.valueChanged.connect(self._redraw)
             self._redraw()
 
     def _build_filter_ui(self, outer: QVBoxLayout) -> None:
@@ -303,7 +320,7 @@ class ConfigurationHelper(QWidget):
             )
             return
         self._worker.submit("lmx_tune", lo_hz)
-        self._freq_spin.setValue(lo_hz / 1e9)
+        self._set_freq_display(lo_hz / 1e9)
         self.lo_status_label.setText(f"LO Frequency: {lo_hz / 1e9:.6f} GHz (applied)")
         if self._on_lo_tuned is not None:
             self._on_lo_tuned()
@@ -313,24 +330,38 @@ class ConfigurationHelper(QWidget):
         # affects the filter score just as much as fr1/fr3/bw do.
         if self._has_rf_filters:
             self._on_scoring_input_changed()
+        self._update_external_lo_display()
         if self._is_populating():
             return
         self._worker.submit("set_iq_swap", not upper_checked)
         self._apply_lo_frequency()
 
     def _on_lo_source_changed(self, internal_selected: bool) -> None:
-        # FR3/auto-tune only apply to the internal synthesizer; sideband
-        # and filter suggestion stay usable via external_lo_spin as f_lo.
-        self.fr3_spin.setEnabled(internal_selected)
+        # FR1/FR3/sideband stay live inputs either way; only the auto-tune
+        # (LMX2820) vs. the external_lo_value_label readout differ by source.
         if not internal_selected:
             self.lo_status_label.setText("")
+        else:
+            # Switching back to Internal - FR1/FR3/sideband may well have
+            # changed while External was selected (that's the point of
+            # keeping them live), so retune now instead of leaving the
+            # LMX2820 (and its Frequency display) stale from the last time
+            # Internal was active.
+            self._apply_lo_frequency()
+        self._update_external_lo_display()
         if self._has_rf_filters:
-            self._redraw()
+            # Re-suggest (not just redraw), or auto-select goes stale.
+            self._on_scoring_input_changed()
 
-    def _current_lo_freq_hz(self) -> float:
-        if self._lo_int_radio.isChecked():
-            return self._compute_required_lo_hz()
-        return self._external_lo_spin.value() * 1e9
+    def _update_external_lo_display(self) -> None:
+        """Keeps external_lo_value_label (owned by the LO Source group, a
+        plain text label - not an input) showing the LO frequency required
+        for the current FR1/FR3/sideband inputs - what to feed in when
+        External LO is selected. Same formula as the LMX2820 auto-tune;
+        runs regardless of LO source so it's never stale by the time
+        External LO gets selected."""
+        lo_hz = self._compute_required_lo_hz()
+        self._external_lo_value_label.setText(f"{lo_hz / 1e9:.6f} GHz")
 
     def _save_inputs(self) -> None:
         save_tx_helper_inputs(self._tab_key, self.fr1_spin.value(), self.fr3_spin.value(), self.bw_spin.value())
@@ -365,7 +396,7 @@ class ConfigurationHelper(QWidget):
 
     def _sideband_centers(self) -> tuple[float, float]:
         """Returns (desired_center_hz, undesired_center_hz)."""
-        f_lo_hz = self._current_lo_freq_hz()
+        f_lo_hz = self._compute_required_lo_hz()
         f_in_hz = self.fr1_spin.value() * 1e9
         if self.upper_sideband_radio.isChecked():
             return f_lo_hz + f_in_hz, f_lo_hz - f_in_hz
@@ -389,7 +420,7 @@ class ConfigurationHelper(QWidget):
     def _redraw(self) -> None:
         self.plot.clear()
 
-        f_lo_hz = self._current_lo_freq_hz()
+        f_lo_hz = self._compute_required_lo_hz()
         bw_hz = self.bw_spin.value() * 1e9
         half_bw_hz = bw_hz / 2.0
         desired_center, undesired_center = self._sideband_centers()
