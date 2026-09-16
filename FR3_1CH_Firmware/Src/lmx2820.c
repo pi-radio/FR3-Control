@@ -12,6 +12,10 @@
 #define LMX2820_CROSSOVER_HZ      11300000000ULL
 #define LMX2820_FREQ_MIN_HZ       6000000000ULL
 #define LMX2820_FREQ_MAX_HZ       22600000000ULL
+/* Power-on/first-boot default frequency - above LMX2820_CROSSOVER_HZ, so a
+ * fresh chip-erase boot exercises the output-doubler VCO path rather than
+ * direct mode. */
+#define LMX2820_DEFAULT_FREQ_HZ   20000000000ULL
 /* Fixed denominator used for every frequency that isn't a clean multiple
  * of the PFD, rather than reducing to a smaller one. */
 #define LMX2820_PLL_DEN           0x80000002UL
@@ -67,7 +71,7 @@
 #define LMX2820_RB_TEMP_SENS_MASK 0x07FFU
 
 #define LMX2820_LOCK_POLL_ATTEMPTS 20U
-#define LMX2820_LOCK_POLL_DELAY_MS 1U
+#define LMX2820_LOCK_POLL_DELAY_MS 100U
 
 /* Cold-boot calibration is attempt-count-dependent (see LMX2820_Tune()) -
  * retries the full RESET+settle+write+poll sequence this many times before
@@ -114,7 +118,7 @@ static const uint16_t lmx2820_template[LMX2820_REG_COUNT] =
   /* R120 */ 0x0000, /* R121 */ 0x0000, /* R122 */ 0x0000
 };
 
-static uint64_t lmx2820_current_freq_hz = LMX2820_FREQ_MIN_HZ;
+static uint64_t lmx2820_current_freq_hz = LMX2820_DEFAULT_FREQ_HZ;
 static uint8_t lmx2820_current_power = 7U;
 static bool lmx2820_current_mute = false;
 static uint8_t lmx2820_current_mux = LMX2820_MUX_DIRECT;
@@ -229,7 +233,7 @@ static bool lmx2820_initialized = false;
 
 void LMX2820_Init(void)
 {
-  lmx2820_current_freq_hz = LMX2820_FREQ_MIN_HZ;
+  lmx2820_current_freq_hz = LMX2820_DEFAULT_FREQ_HZ;
   lmx2820_current_power = 7U;
   lmx2820_current_mute = false;
   lmx2820_current_mux = LMX2820_MUX_DIRECT;
@@ -315,6 +319,7 @@ bool LMX2820_Tune(uint64_t freq_hz)
       for (addr = (int32_t)LMX2820_REG_COUNT - 1; addr >= 0; addr--)
       {
         LMX2820_WriteRegister((uint8_t)addr, regs[addr]);
+        HAL_Delay(10U);
       }
 
       LMX2820_WriteRegister(0U, regs[0]);

@@ -54,13 +54,13 @@ void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, LO_CTRL_3V3_Pin|IQ_SWAP_SW_3V3_Pin, GPIO_PIN_RESET);
 
-  /* CLK_SEL (PE13): 1 = internal 10MHz TCXO, 0 = external SMA reference -
-   * default to internal, not CubeMX's usual all-pins-low default, so a
-   * fresh mass-erase/reflash boots with the on-board TCXO selected rather
-   * than an external reference the user hasn't necessarily connected.
-   * NOTE: this file is CubeMX-generated - regenerating GPIO code from the
-   * .ioc pinout editor will silently revert this. If that happens, also
-   * set PE13's "GPIO Output level" to High in the Device Configurator. */
+  /* CLK_SEL defaults to Internal (SET), not External (RESET) - this line
+   * gets silently regenerated back to GPIO_PIN_RESET by CubeMX any time
+   * gpio.c is regenerated from the .ioc pinout editor (no USER CODE
+   * markers wrap individual pin defaults here), so re-check this after any
+   * future "Generate Code". Only matters on a fresh/mass-erased chip - once
+   * Settings_Init() runs, the persisted settings.clock_internal value
+   * overrides this at runtime regardless. */
   HAL_GPIO_WritePin(GPIOE, CLK_SEL_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
@@ -119,11 +119,9 @@ void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PB0 PB1 PB2 PB10
-                           PB12 PB13 PB14 PB15
-                           PB3 */
+                           PB12 PB15 PB3 */
   GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_10
-                          |GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15
-                          |GPIO_PIN_3;
+                          |GPIO_PIN_12|GPIO_PIN_15|GPIO_PIN_3;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);

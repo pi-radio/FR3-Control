@@ -6,6 +6,7 @@
 #include "main.h"
 #include "rf_filter.h"
 #include "settings.h"
+#include "usb_pd_sink.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
@@ -119,6 +120,44 @@ void Commands_ProcessLine(const char *line, char *response, size_t response_capa
   if (strcmp(line, "GET BOARD SERIAL") == 0)
   {
     snprintf(response, response_capacity, "%lu\r\n", (unsigned long)Settings_GetBoardSerial());
+    return;
+  }
+
+  if (strcmp(line, "GET RESET CAUSE") == 0)
+  {
+    /* Bring-up diagnostic: space-separated flags captured at the very
+     * start of main() (e.g. "BOR", "SFT", "NONE") - tells a genuine
+     * brownout reset apart from a software reset, watchdog, or a plain
+     * NRST pin reset. */
+    snprintf(response, response_capacity, "%s\r\n", Main_GetResetCause());
+    return;
+  }
+
+  if (strcmp(line, "GET USB PD CURRENT") == 0)
+  {
+    /* Bring-up diagnostic: what current tier the attached USB-C source is
+     * actually advertising via CC (see usb_pd_sink.c) - confirms whether
+     * the board is being recognized as a valid sink and getting more than
+     * bare default current. */
+    const char *tier_str;
+
+    switch (USBPDSink_GetCurrentTier())
+    {
+      case USB_PD_SINK_CURRENT_3_0A:
+        tier_str = "3.0A";
+        break;
+      case USB_PD_SINK_CURRENT_1_5A:
+        tier_str = "1.5A";
+        break;
+      case USB_PD_SINK_CURRENT_DEFAULT:
+        tier_str = "DEFAULT";
+        break;
+      case USB_PD_SINK_CURRENT_NONE:
+      default:
+        tier_str = "NONE";
+        break;
+    }
+    snprintf(response, response_capacity, "%s\r\n", tier_str);
     return;
   }
 

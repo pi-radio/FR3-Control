@@ -29,6 +29,18 @@ extern "C" {
 /* Includes ------------------------------------------------------------------*/
 #include "stm32h5xx_hal.h"
 
+#include "stm32h5xx_ll_ucpd.h"
+#include "stm32h5xx_ll_bus.h"
+#include "stm32h5xx_ll_cortex.h"
+#include "stm32h5xx_ll_rcc.h"
+#include "stm32h5xx_ll_system.h"
+#include "stm32h5xx_ll_utils.h"
+#include "stm32h5xx_ll_pwr.h"
+#include "stm32h5xx_ll_gpio.h"
+#include "stm32h5xx_ll_dma.h"
+
+#include "stm32h5xx_ll_exti.h"
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -53,7 +65,9 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-
+/* Space-separated reset-cause flags captured at the very start of main()
+ * (e.g. "BOR ", "SFT ", "NONE") - see the "GET RESET CAUSE" command. */
+const char *Main_GetResetCause(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/

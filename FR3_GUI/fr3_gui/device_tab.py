@@ -180,11 +180,28 @@ class DeviceTab(QWidget):
         self.status_text = QLabel("Connected")
         self.status_text.setStyleSheet("color: #1a7f1a; font-weight: bold;")
 
+        self.disconnect_button = QPushButton("Disconnect")
+        self.disconnect_button.setAutoDefault(False)
+        self.disconnect_button.setDefault(False)
+        self.disconnect_button.setStyleSheet("padding: 1px 8px;")
+        self.disconnect_button.clicked.connect(self._on_disconnect_clicked)
+
         layout.addWidget(title)
         layout.addStretch(1)
         layout.addWidget(self.status_dot, 0, Qt.AlignVCenter)
         layout.addWidget(self.status_text, 0, Qt.AlignVCenter)
+        layout.addWidget(self.disconnect_button, 0, Qt.AlignVCenter)
         return box
+
+    def _on_disconnect_clicked(self) -> None:
+        """Lets the user release the serial port on demand (e.g. to free it
+        up for PuTTY/minicom) without unplugging the board. Reuses
+        connection_lost rather than a dedicated signal - MainWindow already
+        treats it as the one path (alongside discovery's port_gone) that
+        tears the tab down and stops the worker; a deliberate disconnect
+        needs exactly that same cleanup, just user-triggered instead of
+        error-triggered."""
+        self.worker.connection_lost.emit()
 
     def _on_connection_lost(self) -> None:
         self.status_dot.setStyleSheet("background-color: #a01414; border-radius: 7px;")

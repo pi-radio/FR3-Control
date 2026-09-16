@@ -21,15 +21,18 @@
 #include "main.h"
 #include "icache.h"
 #include "spi.h"
+#include "ucpd.h"
 #include "usb.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
 #include "lmx2820.h"
 #include "ltc2668.h"
 #include "power_sequence.h"
 #include "settings.h"
+#include "usb_pd_sink.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,7 +53,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+/* Captured once, first thing in main() - see Main_GetResetCause(). */
+static char main_reset_cause[64] = "UNKNOWN";
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -73,7 +77,46 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+  /* Diagnostic: capture why the MCU actually reset, before anything else
+   * (including HAL_Init()) has a chance to touch RCC - see
+   * Main_GetResetCause() / "GET RESET CAUSE". Distinguishes a genuine
+   * brownout (BOR) from a software reset, watchdog, or a plain NRST pin
+   * reset. Cleared right after reading so the *next* reset's flags don't
+   * OR together with this one's. */
+  {
+    size_t pos = 0U;
 
+    if (__HAL_RCC_GET_FLAG(RCC_FLAG_BORRST))
+    {
+      pos += (size_t)snprintf(&main_reset_cause[pos], sizeof(main_reset_cause) - pos, "BOR ");
+    }
+    if (__HAL_RCC_GET_FLAG(RCC_FLAG_PINRST))
+    {
+      pos += (size_t)snprintf(&main_reset_cause[pos], sizeof(main_reset_cause) - pos, "PIN ");
+    }
+    if (__HAL_RCC_GET_FLAG(RCC_FLAG_SFTRST))
+    {
+      pos += (size_t)snprintf(&main_reset_cause[pos], sizeof(main_reset_cause) - pos, "SFT ");
+    }
+    if (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDGRST))
+    {
+      pos += (size_t)snprintf(&main_reset_cause[pos], sizeof(main_reset_cause) - pos, "IWDG ");
+    }
+    if (__HAL_RCC_GET_FLAG(RCC_FLAG_WWDGRST))
+    {
+      pos += (size_t)snprintf(&main_reset_cause[pos], sizeof(main_reset_cause) - pos, "WWDG ");
+    }
+    if (__HAL_RCC_GET_FLAG(RCC_FLAG_LPWRRST))
+    {
+      pos += (size_t)snprintf(&main_reset_cause[pos], sizeof(main_reset_cause) - pos, "LPWR ");
+    }
+    if (pos == 0U)
+    {
+      snprintf(main_reset_cause, sizeof(main_reset_cause), "NONE");
+    }
+
+    __HAL_RCC_CLEAR_RESET_FLAGS();
+  }
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -107,6 +150,7 @@ int main(void)
   MX_GPIO_Init();
   MX_ICACHE_Init();
   MX_SPI4_Init();
+  MX_UCPD1_Init();
   /* USER CODE BEGIN 2 */
   /* MX_USB_PCD_Init() deliberately NOT called here - it runs later, from
      inside app_ux_device_thread_entry() (app_usbx_device.c), alongside
@@ -119,6 +163,12 @@ int main(void)
   /* Boot-health diagnostic: reaching here means clocks, GPIO, and basic
      peripheral init all succeeded. */
   HAL_GPIO_WritePin(TEST_POINT_1_GPIO_Port, TEST_POINT_1_Pin, GPIO_PIN_SET);
+
+  /* As early as possible - before PowerSequence_Init() starts drawing any
+   * real current - so a compliant USB-C source has the most possible time
+   * to see a valid Rd sink and ramp up its current offering before the
+   * board actually needs it. */
+  USBPDSink_Init();
 
   PowerSequence_Init();
   LMX2820_Init();
@@ -208,7 +258,10 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+const char *Main_GetResetCause(void)
+{
+  return main_reset_cause;
+}
 /* USER CODE END 4 */
 
  /* MPU Configuration */
