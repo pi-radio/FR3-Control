@@ -32,6 +32,7 @@ extern "C" {
 #include "app_azure_rtos_config.h"
 
 #include "app_usbx.h"
+#include "usbpd.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */

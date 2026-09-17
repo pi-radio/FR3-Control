@@ -43,15 +43,11 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 
-/* Bumped from CubeMX's regenerated default of 1024 - a HardFault inside
- * newlib's __ssvfscanf_r (the sscanf() call in Commands_ProcessLine(),
- * board_commands.c, which runs unconditionally on every command line
- * before the string-compare checks) confirmed via debugger call stack that
- * this thread's stack was overflowing. Even newlib-nano's scanf family is
- * stack-heavy internally, on top of Commands_ProcessLine()'s own locals
- * (char upper_line[64], etc.) - 1024 bytes wasn't enough headroom. Also
- * outside any USER CODE block - re-check after any future CubeMX
- * regeneration. */
+/* Bumped from CubeMX's regenerated default of 1024 - see
+ * CUBEMX_REGEN_CHECKLIST.md. A HardFault inside newlib's sscanf (called
+ * unconditionally by Commands_ProcessLine()) confirmed this thread's stack
+ * was overflowing at 1024. Also outside any USER CODE block - re-check
+ * after any future CubeMX regeneration. */
 #define UX_DEVICE_APP_THREAD_STACK_SIZE   4096
 #define UX_DEVICE_APP_THREAD_PRIO         10
 

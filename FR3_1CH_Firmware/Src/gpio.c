@@ -54,13 +54,8 @@ void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, LO_CTRL_3V3_Pin|IQ_SWAP_SW_3V3_Pin, GPIO_PIN_RESET);
 
-  /* CLK_SEL defaults to Internal (SET), not External (RESET) - this line
-   * gets silently regenerated back to GPIO_PIN_RESET by CubeMX any time
-   * gpio.c is regenerated from the .ioc pinout editor (no USER CODE
-   * markers wrap individual pin defaults here), so re-check this after any
-   * future "Generate Code". Only matters on a fresh/mass-erased chip - once
-   * Settings_Init() runs, the persisted settings.clock_internal value
-   * overrides this at runtime regardless. */
+  /* CLK_SEL defaults to Internal (SET), not External (RESET) - see
+   * CUBEMX_REGEN_CHECKLIST.md. Only matters on a fresh/mass-erased chip. */
   HAL_GPIO_WritePin(GPIOE, CLK_SEL_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */

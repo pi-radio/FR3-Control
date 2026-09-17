@@ -19,11 +19,13 @@
 /* Includes ------------------------------------------------------------------*/
 #include "app_threadx.h"
 #include "main.h"
+#include "gpdma.h"
 #include "icache.h"
 #include "spi.h"
 #include "ucpd.h"
 #include "usb.h"
 #include "gpio.h"
+#include "usbpd.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -148,9 +150,12 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_GPDMA1_Init();
   MX_ICACHE_Init();
-  MX_SPI4_Init();
   MX_UCPD1_Init();
+  MX_SPI4_Init();
+  /* Call PreOsInit function */
+  USBPD_PreInitOs();
   /* USER CODE BEGIN 2 */
   /* MX_USB_PCD_Init() deliberately NOT called here - it runs later, from
      inside app_ux_device_thread_entry() (app_usbx_device.c), alongside
@@ -164,11 +169,15 @@ int main(void)
      peripheral init all succeeded. */
   HAL_GPIO_WritePin(TEST_POINT_1_GPIO_Port, TEST_POINT_1_Pin, GPIO_PIN_SET);
 
-  /* As early as possible - before PowerSequence_Init() starts drawing any
-   * real current - so a compliant USB-C source has the most possible time
-   * to see a valid Rd sink and ramp up its current offering before the
-   * board actually needs it. */
-  USBPDSink_Init();
+  /* USBPDSink_Init() (usb_pd_sink.c) is NOT called here anymore - the full
+   * USBPD middleware now owns UCPD1 (MX_USBPD_Init(), called from
+   * tx_application_define() in app_azure_rtos.c once the scheduler starts).
+   * Calling our old hand-rolled LL_UCPD_Enable()/SetSNKRole()/SetccEnable()
+   * sequence here would fight the middleware's own hardware interface
+   * layer over the same registers. usb_pd_sink.c is kept around only for
+   * its read-only USBPDSink_GetCurrentTier() diagnostic ("GET USB PD
+   * CURRENT"), which is safe to keep calling since it never writes to
+   * UCPD1 - only USBPDSink_Init() (the writing half) was removed. */
 
   PowerSequence_Init();
   LMX2820_Init();
