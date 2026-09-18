@@ -26,7 +26,7 @@ from typing import Callable, Optional
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QPalette
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -82,16 +82,39 @@ BASELINE_SUPPRESSION_DB = DESIRED_TOP_DB - UNDESIRED_TOP_DB
 MIN_REJECTION_DB = 40.0
 
 
-class _NoWheelZoomPlotWidget(pg.PlotWidget):
-    """A plain PlotWidget, except mouse-wheel scroll does nothing (instead
-    of pyqtgraph's default zoom) - this graph sits in a scrollable settings
-    panel, so scrolling over it while reading values shouldn't zoom it.
-    Overridden at the widget level (the real wheel event's first point of
-    entry), not on the ViewBox - pyqtgraph's own GraphicsView base class
-    handles wheel-zoom itself before a ViewBox-level override ever sees it."""
+class _NoWheelZoomGraphicsLayoutWidget(pg.GraphicsLayoutWidget):
+    """A plain GraphicsLayoutWidget, except mouse-wheel scroll does nothing
+    (instead of pyqtgraph's default zoom) - this graph sits in a scrollable
+    settings panel, so scrolling over it while reading values shouldn't
+    zoom it. Overridden at the widget level (the real wheel event's first
+    point of entry), not on the ViewBox - pyqtgraph's own GraphicsView base
+    class handles wheel-zoom itself before a ViewBox-level override ever
+    sees it."""
 
     def wheelEvent(self, ev):
         ev.ignore()
+
+
+class _CenteredItemSample(pg.ItemSample):
+    """pyqtgraph's default ItemSample is a fixed 20px box, shorter than a
+    LabelItem's natural ~24px height at this legend's 9pt font - matches
+    the sample's height to the label's so both cells center on the same
+    line. Only handles a plain pen line (every entry in this legend is a
+    simple PlotDataItem with a pen, no symbols/fills)."""
+
+    _HEIGHT = 24
+
+    def __init__(self, item):
+        super().__init__(item)
+        self.setFixedHeight(self._HEIGHT)
+
+    def boundingRect(self):
+        return QRectF(0, 0, 20, self._HEIGHT)
+
+    def paint(self, p, *args):
+        mid = self._HEIGHT / 2
+        p.setPen(pg.mkPen(self.item.opts["pen"]))
+        p.drawLine(QPointF(0, mid), QPointF(20, mid))
 
 
 def _rect_outline(x0: float, x1: float, y0: float, y1: float, color: str, name: str) -> pg.PlotDataItem:
@@ -291,31 +314,44 @@ class ConfigurationHelper(QWidget):
         outer.addWidget(self.auto_select_filter_checkbox)
         self.suggest_button.setEnabled(not self.auto_select_filter_checkbox.isChecked())
 
-        self.plot = _NoWheelZoomPlotWidget()
-        # Tall enough for the 5-row legend plus the plot itself - this
-        # widget's own natural sizeHint is far too short to fit both.
+        self.plot = _NoWheelZoomGraphicsLayoutWidget()
+        # Tall enough for the plot itself - this widget's own natural
+        # sizeHint is far too short.
         self.plot.setMinimumHeight(320)
         self.plot.setBackground(self.palette().color(QPalette.Window))
-        self.plot.setLabel("bottom", "Frequency", units="Hz", color="black", **{"font-weight": "bold"})
-        self.plot.setLabel("left", "Level (dB, illustrative)", color="black", **{"font-weight": "bold"})
-        self.plot.getAxis("bottom").setTextPen("black")
-        self.plot.getAxis("left").setTextPen("black")
-        self.plot.getAxis("left").setTicks([[(v, str(int(v))) for v in range(0, int(Y_MIN_DB) - 1, -10)]])
-        self.plot.showGrid(x=True, y=True, alpha=0.3)
-        # verSpacing tightened and offset raised - the default top offset
-        # (30px) plus 5 legend rows can run the last row past the plot
-        # widget's own visible bottom edge, making it effectively disappear.
-        legend = self.plot.addLegend(offset=(30, 5), verSpacing=-5)
-        legend.setLabelTextColor("black")
+
+        # Legend in its own column (0) to the left of the plot (column 1),
+        # rather than overlaid on the ViewBox (pyqtgraph's usual
+        # PlotItem.addLegend()) - the filter S21 traces span nearly the
+        # whole plot, so an overlaid legend always ends up on top of one.
+        self.legend = pg.LegendItem(sampleType=_CenteredItemSample)
+        self.legend.setLabelTextColor("black")
+        # Caps the legend's height so the outer layout can't stretch it to
+        # match the much-taller plot next to it in column 1 - otherwise it
+        # locks in a stretched height the moment the still-empty legend is
+        # added, before _redraw() populates its 5 real rows, and never
+        # revisits it. AlignTop alone doesn't prevent the stretch, only
+        # where the item sits within whatever space it's given.
+        self.legend.setMaximumHeight(30 * 5)
+        self.plot.addItem(self.legend, row=0, col=0)
+        self.plot.ci.layout.setAlignment(self.legend, Qt.AlignTop)
+
+        self.plot_item = self.plot.addPlot(row=0, col=1)
+        self.plot_item.setLabel("bottom", "Frequency", units="Hz", color="black", **{"font-weight": "bold"})
+        self.plot_item.setLabel("left", "Level (dB, illustrative)", color="black", **{"font-weight": "bold"})
+        self.plot_item.getAxis("bottom").setTextPen("black")
+        self.plot_item.getAxis("left").setTextPen("black")
+        self.plot_item.getAxis("left").setTicks([[(v, str(int(v))) for v in range(0, int(Y_MIN_DB) - 1, -10)]])
+        self.plot_item.showGrid(x=True, y=True, alpha=0.3)
         # Exact bounds (not pyqtgraph's own fractional padding) so they
         # stay in lockstep with Y_VIEW_BOTTOM_DB/Y_VIEW_TOP_DB above, which
         # the desired/undesired rectangles also extend to.
-        self.plot.setYRange(Y_VIEW_BOTTOM_DB, Y_VIEW_TOP_DB, padding=0)
+        self.plot_item.setYRange(Y_VIEW_BOTTOM_DB, Y_VIEW_TOP_DB, padding=0)
         # Hides the "A" auto-range corner button - clicking it would fit the
         # view to every plotted item's full extent (the raw filter S21 data
         # spans well past this graph's intentional 6-30GHz/0 to -50dB window),
         # not just the current sideband/LO region.
-        self.plot.hideButtons()
+        self.plot_item.hideButtons()
         outer.addWidget(self.plot)
 
     # ---- LO frequency computation/application ----
@@ -549,58 +585,79 @@ class ConfigurationHelper(QWidget):
         filter_only_rejection_db = 10.0 * np.log10(desired_power / max(undesired_power, 1e-30))
         return desired_power, filter_only_rejection_db + BASELINE_SUPPRESSION_DB
 
+    def _add_legend_item(self, item: pg.PlotDataItem, name: str) -> None:
+        """AlignVCenter on the label is a safety net in case a platform's
+        font metrics ever make it taller than _CenteredItemSample's height
+        - see __init__'s legend.setMaximumHeight() comment for the actual
+        fix behind keeping the sample and label aligned."""
+        self.legend.addItem(item, name)
+        label = self.legend.getLabel(item)
+        self.legend.layout.setAlignment(label, Qt.AlignVCenter)
+
     def _redraw(self) -> None:
         if not self._is_configuration_valid():
             # Leave whatever was last plotted for a valid configuration on
             # screen, rather than drawing a frequency the LMX2820 could
             # never actually be tuned to.
             return
-        self.plot.clear()
+        self.plot_item.clear()
+        # Legend lives outside plot_item's ViewBox, so clear() above
+        # doesn't touch it - clear separately before re-adding below.
+        self.legend.clear()
 
         f_lo_hz = self._compute_required_lo_hz()
         bw_hz = self.bw_spin.value() * 1e9
         half_bw_hz = bw_hz / 2.0
         desired_center, undesired_center = self._sideband_centers()
 
-        self.plot.addItem(_hatched_fill(
+        self.plot_item.addItem(_hatched_fill(
             undesired_center - half_bw_hz, undesired_center + half_bw_hz,
             UNDESIRED_BOTTOM_DB, UNDESIRED_TOP_DB, "r",
         ))
-        self.plot.addItem(_rect_outline(
+        undesired_outline = _rect_outline(
             undesired_center - half_bw_hz, undesired_center + half_bw_hz,
             UNDESIRED_BOTTOM_DB, UNDESIRED_TOP_DB, "r", "Undesired sideband (Pre-filtering)",
-        ))
-        self.plot.addItem(_hatched_fill(
+        )
+        self.plot_item.addItem(undesired_outline)
+        self._add_legend_item(undesired_outline, undesired_outline.name())
+
+        self.plot_item.addItem(_hatched_fill(
             desired_center - half_bw_hz, desired_center + half_bw_hz,
             DESIRED_BOTTOM_DB, DESIRED_TOP_DB, "g",
         ))
-        self.plot.addItem(_rect_outline(
+        desired_outline = _rect_outline(
             desired_center - half_bw_hz, desired_center + half_bw_hz,
             DESIRED_BOTTOM_DB, DESIRED_TOP_DB, "g", "Desired sideband (Pre-filtering)",
-        ))
-        self.plot.plot(
+        )
+        self.plot_item.addItem(desired_outline)
+        self._add_legend_item(desired_outline, desired_outline.name())
+
+        lo_leakage = self.plot_item.plot(
             [f_lo_hz, f_lo_hz], [LO_BOTTOM_DB, LO_TOP_DB],
             pen=pg.mkPen("k", width=4), name="LO Leakage (Static)",
         )
+        self._add_legend_item(lo_leakage, "LO Leakage (Static)")
         # angle=90 points up (pyqtgraph's default angle=0 points left);
         # pos is the arrow's tip.
-        self.plot.addItem(pg.ArrowItem(pos=(f_lo_hz, LO_TOP_DB), angle=90, pen="k", brush="k"))
+        self.plot_item.addItem(pg.ArrowItem(pos=(f_lo_hz, LO_TOP_DB), angle=90, pen="k", brush="k"))
 
         # Bypass until a suggestion has actually been made - not TX or RX's
         # own current filter setting, since this graph previews a candidate
         # rather than tracking either one's live hardware state.
         response = get_response(self.suggested_bits if self.suggested_bits is not None else 0x00)
-        self.plot.plot(
+        filter_raw = self.plot_item.plot(
             response.freq_hz, response.s21_db,
             pen=pg.mkPen("b", width=4, style=Qt.DashLine), name="Filter S21 (raw)",
         )
+        self._add_legend_item(filter_raw, "Filter S21 (raw)")
         # Normalized to 0dB peak: only passband shape/position relative to
         # the illustrative reference levels matters here, not absolute loss.
         normalized_s21 = response.s21_db - response.s21_db.max()
-        self.plot.plot(
+        filter_normalized = self.plot_item.plot(
             response.freq_hz, normalized_s21,
             pen=pg.mkPen("b", width=4), name="Filter S21 (normalized)",
         )
+        self._add_legend_item(filter_normalized, "Filter S21 (normalized)")
 
         edges = [
             desired_center - half_bw_hz, desired_center + half_bw_hz,
@@ -609,7 +666,7 @@ class ConfigurationHelper(QWidget):
         ]
         low, high = min(edges), max(edges)
         margin = (high - low) * 0.15 or 1e9
-        self.plot.setXRange(low - margin, high + margin, padding=0)
+        self.plot_item.setXRange(low - margin, high + margin, padding=0)
 
     def _suggest_filter(self) -> None:
         """Searches all 48 non-Bypass configs (3 bands x 16 sub-states).
