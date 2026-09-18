@@ -1,6 +1,7 @@
 #include "board_commands.h"
 #include "board_config.h"
 #include "board_io.h"
+#include "ina229.h"
 #include "lmx2820.h"
 #include "ltc2668.h"
 #include "main.h"
@@ -423,6 +424,23 @@ void Commands_ProcessLine(const char *line, char *response, size_t response_capa
     return;
   }
 #endif /* BOARD_HAS_LMX2820 */
+
+#if BOARD_HAS_INA229
+  /* INA229 is write-only from firmware (its 5V0 SDO is physically
+   * disconnected from the shared 3.3V MISO bus - see
+   * fr3-1ch-ina229-5v-sdo-cannot-share-3v3-miso). Alerts are latched, so
+   * this resets the chip and reconfigures it (see INA229_ClearAlarms()) -
+   * the only write-only-compatible way to clear a latched alarm and turn
+   * the ALARM LED back off. Can't confirm anything actually happened, and
+   * there's no VBUS/current/alarm-status query to pair with SET/GET-style
+   * commands elsewhere in this file. */
+  if (strcmp(line, "INA ALARM CLEAR") == 0)
+  {
+    INA229_ClearAlarms();
+    snprintf(response, response_capacity, "OK\r\n");
+    return;
+  }
+#endif /* BOARD_HAS_INA229 */
 
 #if BOARD_HAS_LTC2668
   matched_chars = -1;

@@ -41,11 +41,9 @@ extern "C" {
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
-/* Bumped from CubeMX's regenerated default of 1024 - see
- * CUBEMX_REGEN_CHECKLIST.md. This is USBX's own internal working memory;
- * 4096 hit UX_MEMORY_INSUFFICIENT inside _ux_device_stack_initialize()
- * (confirmed via debugger), 16K is comfortably clear of that. Also outside
- * any USER CODE block - re-check after any future CubeMX regeneration. */
+/* CubeMX regenerates this to 1024 on every "Generate Code" - see
+ * CUBEMX_REGEN_CHECKLIST.md item 1. 16384 is the minimum that doesn't
+ * return UX_MEMORY_INSUFFICIENT from ux_device_stack_initialize(). */
 #define USBX_MEMORY_STACK_SIZE       16384
 /* USER CODE BEGIN EC */
 

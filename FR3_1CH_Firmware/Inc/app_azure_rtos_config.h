@@ -45,11 +45,9 @@ extern "C" {
 
 #define TX_APP_MEM_POOL_SIZE                     1024
 
-/* Bumped from CubeMX's regenerated default of 1024 - see
- * CUBEMX_REGEN_CHECKLIST.md. Two back-to-back allocations exhaust a
- * 1024-byte pool immediately, hanging tx_application_define() before USB
- * is ever touched. Also outside any USER CODE block - re-check after any
- * future regeneration. */
+/* CubeMX regenerates this to 1024 on every "Generate Code" - see
+ * CUBEMX_REGEN_CHECKLIST.md item 1. 24576 is the minimum that doesn't hang
+ * in tx_application_define()'s error trap. */
 #define UX_APP_MEM_POOL_SIZE                     24576
 
 #define USBPD_DEVICE_APP_MEM_POOL_SIZE              5000

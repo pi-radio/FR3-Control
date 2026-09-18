@@ -319,7 +319,7 @@ bool LMX2820_Tune(uint64_t freq_hz)
       for (addr = (int32_t)LMX2820_REG_COUNT - 1; addr >= 0; addr--)
       {
         LMX2820_WriteRegister((uint8_t)addr, regs[addr]);
-        HAL_Delay(10U);
+        HAL_Delay(1U);
       }
 
       LMX2820_WriteRegister(0U, regs[0]);

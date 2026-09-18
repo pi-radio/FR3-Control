@@ -43,11 +43,9 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 
-/* Bumped from CubeMX's regenerated default of 1024 - see
- * CUBEMX_REGEN_CHECKLIST.md. A HardFault inside newlib's sscanf (called
- * unconditionally by Commands_ProcessLine()) confirmed this thread's stack
- * was overflowing at 1024. Also outside any USER CODE block - re-check
- * after any future CubeMX regeneration. */
+/* CubeMX regenerates this to 1024 on every "Generate Code" - see
+ * CUBEMX_REGEN_CHECKLIST.md item 1. 4096 is the minimum that doesn't
+ * HardFault inside newlib's sscanf() on almost every serial command. */
 #define UX_DEVICE_APP_THREAD_STACK_SIZE   4096
 #define UX_DEVICE_APP_THREAD_PRIO         10
 

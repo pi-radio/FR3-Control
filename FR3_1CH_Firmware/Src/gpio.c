@@ -66,7 +66,13 @@ void MX_GPIO_Init(void)
                           |TXFILT_V0_Pin|TXFILT_VB_Pin|TXFILT_VA_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(TCXO_EN_3V3_GPIO_Port, TCXO_EN_3V3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, TCXO_EN_3V3_Pin, GPIO_PIN_RESET);
+
+  /* SPI_INA_CSb (INA229 chip select) must default High/deselected - see
+   * CUBEMX_REGEN_CHECKLIST.md item 3b. A floating or wrongly-defaulted CS
+   * on a shared SPI bus is a real correctness hazard for every other
+   * device on that bus, not just this chip. */
+  HAL_GPIO_WritePin(GPIOC, SPI_INA_CSb_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, RXFILT_VA_Pin|RXFILT_VB_Pin|RXFILT_V0_Pin|RXFILT_V1_Pin
@@ -82,12 +88,12 @@ void MX_GPIO_Init(void)
 
   /*Configure GPIO pins : PC13 PC14 PC15 PC0
                            PC1 PC2 PC3 PC4
-                           PC5 PC6 PC8 PC9
-                           PC10 PC11 PC12 */
+                           PC5 PC6 PC9 PC10
+                           PC11 PC12 */
   GPIO_InitStruct.Pin = GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15|GPIO_PIN_0
                           |GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4
-                          |GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_8|GPIO_PIN_9
-                          |GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12;
+                          |GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_9|GPIO_PIN_10
+                          |GPIO_PIN_11|GPIO_PIN_12;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
@@ -149,12 +155,12 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : TCXO_EN_3V3_Pin */
-  GPIO_InitStruct.Pin = TCXO_EN_3V3_Pin;
+  /*Configure GPIO pins : TCXO_EN_3V3_Pin SPI_INA_CSb_Pin */
+  GPIO_InitStruct.Pin = TCXO_EN_3V3_Pin|SPI_INA_CSb_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(TCXO_EN_3V3_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA13 */
   GPIO_InitStruct.Pin = GPIO_PIN_13;

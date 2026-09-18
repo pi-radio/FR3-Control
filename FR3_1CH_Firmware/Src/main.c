@@ -30,6 +30,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include "board_config.h"
+#include "ina229.h"
 #include "lmx2820.h"
 #include "ltc2668.h"
 #include "power_sequence.h"
@@ -180,6 +182,14 @@ int main(void)
    * UCPD1 - only USBPDSink_Init() (the writing half) was removed. */
 
   PowerSequence_Init();
+#if BOARD_HAS_INA229
+  /* Board power monitor - deselected (PC8 high) since MX_GPIO_Init(), so
+   * this is safe to bring up now that the rails it measures (inrush, 3V7,
+   * 5V5) are stable. Runs before LMX2820_Init()/Settings_Init() so the
+   * INA229's alarm config is known-clean before the LMX2820's own SPI4
+   * traffic starts. */
+  INA229_Init();
+#endif
   LMX2820_Init();
   LTC2668_Init();
   Settings_Init();

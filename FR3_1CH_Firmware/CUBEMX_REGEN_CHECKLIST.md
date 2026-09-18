@@ -56,6 +56,28 @@ pre-scheduler `main()`. Leaving the re-added call in doesn't necessarily
 break anything by itself, but it's redundant/wrong and worth removing to
 keep the actual init flow matching what the surrounding comments describe.
 
+## 3b. `gpio.c` - `SPI_INA_CSb` (PC8) must default High (deselected)
+
+Same class of regression as CLK_SEL above (section 2): `SPI_INA_CSb` (the
+INA229's chip select, rev 1.4 only) must come up **High** (deselected) as
+part of `MX_GPIO_Init()`'s own output-level setup, before `MX_SPI4_Init()`
+or any SPI4 traffic happens. This isn't just a "nice to have" default -
+this pin was floating (no pull, analog mode) for a long time before the
+INA229 was wired into firmware at all, and is suspected of having caused
+real, hard-to-diagnose SPI4 bus contention with the LMX2820's MISO line
+(a floating active-low CS on a shared bus can pick up enough coupling from
+SCLK/MOSI to falsely select the INA229 mid-transaction). If a future
+regeneration ever puts `SPI_INA_CSb` back into a combined `GPIO_PIN_RESET`
+group (the same failure pattern CLK_SEL hit) or drops it from the pinout
+entirely, re-check and re-split it out explicitly, same fix pattern as
+CLK_SEL.
+
+Also re-check SPI4's **Prescaler (for Baud Rate)** is still **8** (4MHz)
+in the Connectivity view after any regeneration that touches SPI4 - it was
+raised from 2 (16MHz) specifically because the INA229 sharing that bus is
+only rated to 10MHz; a stray edit back to 2 wouldn't break the LMX2820 or
+LTC2668 (both handle 16MHz fine) but would put the INA229 out of spec.
+
 ## 4. Check for brand-new files/calls added by a *new* CubeMX component
 
 This list covers the *known* recurring regressions from regenerating with
@@ -92,7 +114,7 @@ isn't available for a quick post-regen scan. After every "Generate Code":
    section 1 - don't trust "I didn't touch that file" reasoning, and don't
    trust a stale in-memory recollection of a file's contents from earlier
    in the same session either. Re-read the file fresh.
-3. Check `gpio.c` and `main.c` per sections 2 and 3.
+3. Check `gpio.c` and `main.c` per sections 2, 3, and 3b.
 4. If GitHub Desktop is open, its Changes list is the fastest way to see
    the full set of files CubeMX actually touched this time - review each
    one, not just the ones expected to change.

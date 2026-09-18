@@ -105,6 +105,8 @@ const char *Main_GetResetCause(void);
 #define TXFILT_VA_GPIO_Port GPIOD
 #define TCXO_EN_3V3_Pin GPIO_PIN_7
 #define TCXO_EN_3V3_GPIO_Port GPIOC
+#define SPI_INA_CSb_Pin GPIO_PIN_8
+#define SPI_INA_CSb_GPIO_Port GPIOC
 #define RXFILT_VA_Pin GPIO_PIN_4
 #define RXFILT_VA_GPIO_Port GPIOB
 #define RXFILT_VB_Pin GPIO_PIN_5

@@ -32,6 +32,7 @@
 #define BOARD_HAS_LO_SWITCH         1
 #define BOARD_HAS_POWER_SEQUENCING  0
 #define BOARD_HAS_RF_FILTERS        0
+#define BOARD_HAS_INA229            0
 
 /* CRITICAL - DO NOT REMOVE THIS WARNING: on this specific revision, the
  * STM32 pins used by rev 1.4 for power-sequencing (INRUSH_EN, BUCK_EN_5V3,
@@ -54,6 +55,7 @@
 #define BOARD_HAS_LO_SWITCH         1
 #define BOARD_HAS_POWER_SEQUENCING  1
 #define BOARD_HAS_RF_FILTERS        1
+#define BOARD_HAS_INA229            1
 
 #elif defined(BOARD_OCTOLO_REV1_4)
 
@@ -69,6 +71,7 @@
 #define BOARD_HAS_LO_SWITCH         0
 #define BOARD_HAS_POWER_SEQUENCING  1
 #define BOARD_HAS_RF_FILTERS        0
+#define BOARD_HAS_INA229            0
 
 #else
 #error "No board selected - define BOARD_FR3_1CH_REV1_1, BOARD_FR3_1CH_REV1_4, or BOARD_OCTOLO_REV1_4 in this build configuration's preprocessor symbols."
