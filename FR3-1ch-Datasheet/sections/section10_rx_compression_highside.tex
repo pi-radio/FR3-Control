@@ -1,0 +1,30 @@
+\clearpage
+\section{RX-side Compression and Safety --- High-Side LO (Spectral Flip)}
+\label{sec:rx-compression-highside}
+
+\textbf{What's plotted, and why it matters.} Identical methodology to
+Section~\ref{sec:rx-compression-lowside}, with the unit tuned to high-side LO instead: at 9 representative
+(FR1, FR3) points, the input power was swept upward from −60\,dBm at the ``RX-side FR3 RF In'' connector, using
+the same ``optimal'' filter-selection algorithm.\footnote{Every point on every curve is a real measurement.} As before, P1dB marks where the gain has dropped 1\,dB below its
+small-signal value, and P3dB marks where it has dropped 3\,dB.
+
+\textbf{Measurement conditions.} The same as in Section~\ref{sec:rx-compression-lowside} (the same run).
+
+\textbf{Why these curves stop early.} As in Section~\ref{sec:rx-compression-lowside}, each sweep stops as soon
+as the measured gain has compressed 5\,dB below its small-signal value, rather than continuing toward the
+−5\,dBm hard safety cap.\footnote{See the footnote in Section~\ref{sec:rx-compression-lowside} for the full
+explanation of the −5\,dBm cap and why it is not the intended stopping point.}
+
+\textbf{No gain expansion here.} The same smooth, monotonic compression seen in
+Section~\ref{sec:rx-compression-lowside} appears here too --- expected for this chain's ADL5545 IF-amplifier
+output stage, not the ADL9006 PA behavior described on the TX side.
+
+\figpair{images/sec10_fig1.pdf}{FR1 = 1.0\,GHz, FR3 = 8.0\,GHz. Filter: \texttt{0x33}.}{fig:10-1}%
+        {images/sec10_fig2.pdf}{FR1 = 2.0\,GHz, FR3 = 8.0\,GHz. Filter: \texttt{0x36}.}{fig:10-2}
+\figpair{images/sec10_fig3.pdf}{FR1 = 3.5\,GHz, FR3 = 9.0\,GHz. Filter: \texttt{0x3E}.}{fig:10-3}%
+        {images/sec10_fig4.pdf}{FR1 = 1.0\,GHz, FR3 = 13.0\,GHz. Filter: \texttt{0x3F}.}{fig:10-4}
+\figpair{images/sec10_fig5.pdf}{FR1 = 2.0\,GHz, FR3 = 14.0\,GHz. Filter: \texttt{0x14}.}{fig:10-5}%
+        {images/sec10_fig6.pdf}{FR1 = 3.5\,GHz, FR3 = 15.0\,GHz. Filter: \texttt{0x1E}.}{fig:10-6}
+\figpair{images/sec10_fig7.pdf}{FR1 = 1.0\,GHz, FR3 = 19.0\,GHz. Filter: \texttt{0x1F}.}{fig:10-7}%
+        {images/sec10_fig8.pdf}{FR1 = 2.0\,GHz, FR3 = 19.0\,GHz. Filter: \texttt{0x1F}.}{fig:10-8}
+\figonesmall{images/sec10_fig9.pdf}{FR1 = 3.5\,GHz, FR3 = 18.5\,GHz. Filter: \texttt{0x1E}.}{fig:10-9}

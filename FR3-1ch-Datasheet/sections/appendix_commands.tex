@@ -1,0 +1,170 @@
+\clearpage
+\section{Command Reference}
+\label{sec:commands}
+\raggedbottom% this appendix's pages end naturally (no stretched paragraph gaps)
+
+Everything the unit does can be controlled over its USB-C connection with plain-text commands --- this is exactly
+what the Pi-Radio GUI uses, so anything the GUI can do, a script can do too (Section~\ref{sec:hw-digital}). This
+appendix lists every command of firmware version 1.4.1.
+
+\textbf{Connecting.} The unit appears on the computer as a USB virtual serial port (a COM port on Windows,
+\texttt{/dev/ttyACM}\textit{n} on Linux, \texttt{/dev/tty.usbmodem}\textit{n} on macOS). The baud-rate setting
+does not matter. Any serial terminal (for example PuTTY) or any language with a serial library will do.
+
+\textbf{How commands work.} Each command is one line of text, ended with a carriage return, a line feed, or both.
+Commands are not case-sensitive and may be up to 63 characters long. The unit echoes every character as it is
+typed, followed by a new line, and then sends exactly one response line: the requested value for a query, or
+\texttt{OK} when a setting was applied. A value out of range returns \texttt{ERR}, and an unrecognized command
+returns \texttt{ERR:[}\textit{command}\texttt{]len=}\textit{n}, echoing what the unit received. In a terminal, the
+up and down arrow keys recall earlier commands. For example:
+\par\medskip\noindent\begin{minipage}{\linewidth}% caption and table stay on one page
+\begin{center}
+\captionof{table}{An example terminal session.}\label{tab:cmd-example}
+\vspace{0.4em}
+\footnotesize
+\begin{tabular}{ll}
+\textit{You type} & \textit{The unit replies} \\
+\hline
+\texttt{*IDN?} & \texttt{FR3 1CH REV1.4,STM32H573VIT6,FW1.4.1} \\
+\texttt{LMX TUNE 12000000000} & \texttt{OK} \\
+\texttt{LMX LOCK?} & \texttt{LOCKED} \\
+\texttt{LMX TEMP?} & \texttt{83.1} \\
+\end{tabular}
+\end{center}
+\end{minipage}\par
+
+\textbf{Settings are remembered.} Every setting marked ``saved'' below is stored in the unit's flash memory, so the
+unit powers up in the state it was last left in. For long automated sweeps, \texttt{SET PERSIST OFF} suspends these
+flash writes (sparing the flash thousands of writes), and \texttt{SET PERSIST ON} resumes them and saves the current
+state once. \texttt{SET PERSIST OFF} lasts only until the next power-up.
+
+\textbf{The unit works in raw values.} The firmware has no notion of FR1, FR3, or sideband: it only sets an LO
+frequency, switch states, filter bytes, and bias voltages. Working out those values from an (FR1, FR3, sideband)
+choice --- for example LO\,=\,FR3\,$-$\,FR1 and \texttt{SET IQ THRU} for the upper sideband
+(Section~\ref{sec:hardware-primer}) --- is done by the host, which the Pi-Radio GUI does for you. Two things the
+unit does set by itself, from the LO frequency: the synthesizer's drive level, and the TX LO-null bias voltages from
+its own stored calibration (Section~\ref{sec:lo-suppression}). Both are on by default, and both can be switched to
+manual.
+
+\begingroup
+\footnotesize
+\renewcommand{\arraystretch}{1.15}
+\newcommand{\cmdtab}[2]{%
+  \par\medskip\noindent\begin{minipage}{\linewidth}% caption and table stay on one page
+  \begin{center}
+  \captionof{table}{Commands: #1.}
+  \vspace{0.4em}
+  \begin{tabularx}{\linewidth}{|>{\raggedright\arraybackslash}p{0.27\linewidth}|X|>{\raggedright\arraybackslash}p{0.2\linewidth}|}
+  \hline
+  \textbf{Command} & \textbf{What it does} & \textbf{Response} \\
+  \hline
+  #2
+  \hline
+  \end{tabularx}
+  \end{center}
+  \end{minipage}\par}
+
+\cmdtab{Identification and settings storage}{%
+\texttt{*IDN?} & Identifies the unit: name, PCB revision, microcontroller, and firmware version. &
+  e.g.\ \texttt{FR3 1CH REV1.4,} \texttt{STM32H573VIT6,FW1.4.1} \\
+\texttt{GET BOARD SERIAL} & The unit's factory-programmed serial number; identifies a physical unit whatever USB
+  port it is on. & e.g.\ \texttt{5} \\
+\texttt{SET PERSIST ON} / \texttt{OFF} & Turns saving of settings to flash on or off (see above). \texttt{ON} also
+  saves the current state immediately. & \texttt{OK} \\
+\texttt{GET PERSIST} & Whether settings are currently being saved. & \texttt{ON} or \texttt{OFF} \\
+}
+
+\cmdtab{LO synthesizer (LMX2820) and clock}{%
+\texttt{LMX TUNE} \textit{f} & Tunes the internal LO to \textit{f} in Hz, 6\,000\,000\,000 to 22\,600\,000\,000, hit
+  exactly to the Hz. Saved. & \texttt{OK}, or \texttt{ERR} out of range \\
+\texttt{LMX FREQ?} & The LO frequency, in Hz. & e.g.\ \texttt{12000000000} \\
+\texttt{LMX LOCK?} & Whether the synthesizer is locked. Check it after every \texttt{LMX TUNE}. &
+  \texttt{LOCKED} or \texttt{UNLOCKED} \\
+\texttt{LMX PWR AUTO} & Sets the LO output drive level from the LO frequency on every tune (the default): 0 for
+  LO up to 13\,GHz, 2 from above 13 to below 20\,GHz, 4 from 20\,GHz up. Saved. & \texttt{OK} \\
+\texttt{LMX PWR} \textit{n} & Fixes the LO output drive level at \textit{n}\,=\,0 (lowest) to 7 (highest), and
+  switches the automatic drive off. Saved. & \texttt{OK}, or \texttt{ERR} \\
+\texttt{LMX PWR MODE?} & Whether the drive level is automatic. & \texttt{AUTO} or \texttt{MANUAL} \\
+\texttt{LMX PWR?} & The LO output drive level in use. & \texttt{0} to \texttt{7} \\
+\texttt{LMX MUTE ON} / \texttt{OFF} & Fully powers the synthesizer down, or back up (\texttt{OFF} re-initializes it
+  and re-tunes it to its last frequency). Saved. & \texttt{OK}, or \texttt{ERR} \\
+\texttt{LMX MUTE?} & Whether the synthesizer is powered down. & \texttt{ON} or \texttt{OFF} \\
+\texttt{LMX TEMP?} & The synthesizer's die temperature, in \textdegree C; keep it below 100\,\textdegree C. &
+  e.g.\ \texttt{83.1} \\
+\texttt{SET LO INT} / \texttt{EXT} & Selects the LO feeding both mixers: the internal synthesizer, or the
+  ``LO In'' connector. \texttt{EXT} also mutes the synthesizer and switches the internal 10\,MHz TCXO off;
+  \texttt{INT} switches the TCXO back on and un-mutes the synthesizer. Saved. &
+  \texttt{OK}, or \texttt{ERR} \\
+\texttt{GET LO} & Which LO is selected. & \texttt{INT} or \texttt{EXT} \\
+\texttt{SET CLOCK INT} / \texttt{EXT} & Selects the synthesizer's 10\,MHz reference: the internal TCXO, or the
+  ``REFCLK In'' connector. Saved. & \texttt{OK} \\
+\texttt{GET CLOCK} & Which reference is selected. & \texttt{INT} or \texttt{EXT} \\
+}
+
+\cmdtab{Transmit path}{%
+\texttt{SET IQ THRU} / \texttt{SWAP} & Selects the TX sideband: \texttt{THRU} for the upper sideband
+  (LO\,=\,FR3\,$-$\,FR1), \texttt{SWAP} for the lower (LO\,=\,FR3\,+\,FR1). Saved. & \texttt{OK} \\
+\texttt{GET IQ} & The selected sideband. & \texttt{THRU} or \texttt{SWAP} \\
+\texttt{SET I\_V} \textit{v}, \texttt{SET Q\_V} \textit{v} & Sets the I or Q LO-null bias voltage, in volts,
+  $-$0.5 to +0.5 (Section~\ref{sec:lo-suppression}), and switches the automatic bias off. Saved. & \texttt{OK}, or
+  \texttt{ERR} out of range \\
+\texttt{IQBIAS AUTO} / \texttt{MANUAL} & \texttt{AUTO} (the default): the unit sets the LO-null bias itself from its
+  stored calibration, on every tune and every 2\,seconds as its temperature changes (paused while the LO is external).
+  \texttt{MANUAL}: the bias stays where it is set. Saved. & \texttt{OK}; \texttt{ERR NOCAL} if no calibration is
+  stored \\
+\texttt{IQBIAS?} & The bias mode, its state (\texttt{ON}, or paused: \texttt{EXTLO}, \texttt{MUTED}; \texttt{NOCAL}),
+  the I and Q voltages applied, and the temperature they were computed for. & e.g.\ \texttt{AUTO ON I=0.019950}
+  \texttt{Q=0.061300 T=63.6} \\
+\texttt{GET I\_V}, \texttt{GET Q\_V} & The I or Q bias voltage, in volts. & e.g.\ \texttt{-0.021400} \\
+\texttt{SET TXFILTER 0x}\textit{nn} & Sets the TX AM3153 filter (filter byte below). Saved. & \texttt{OK} \\
+\texttt{GET TXFILTER} & The TX filter byte. & e.g.\ \texttt{0x3E} \\
+}
+
+\cmdtab{LO-null calibration (stored in the unit at the factory; Section~\ref{sec:lo-suppression})}{%
+\texttt{CAL INFO?} & The stored calibration: number of entries (312 for a full one: 156 LO frequencies, cold and hot),
+  format, integrity check, serial number of the unit it was made for, and date. & e.g.\ \texttt{N=312 FMT=1 CRC=OK}
+  \texttt{SN=6 DATE=20261010}, or \texttt{NONE} \\
+\texttt{CAL TEMPS?} & The die-temperature ranges of the cold and the hot calibration, in \textdegree C. &
+  e.g.\ \texttt{C=61.0..67.8} \texttt{H=73.8..85.3} \\
+\texttt{CAL LO?} \textit{k} \texttt{C} / \texttt{H} & One stored entry: LO frequency number \textit{k} (0 for
+  7.0\,GHz to 155 for 22.5\,GHz), cold or hot: I\_V, Q\_V, and the temperature it was measured at. &
+  e.g.\ \texttt{0.019950} \texttt{0.061300 62.7} \\
+\texttt{CAL CLEAR}, \texttt{CAL LO} \textit{k} \texttt{C}/\texttt{H} \textit{i q t}, \texttt{CAL DATE}
+  \textit{yyyymmdd}, \texttt{CAL STAGED?}, \texttt{CAL COMMIT} & Factory use: load a new calibration one entry at a
+  time, then write it to flash (checked by reading it back). Nothing changes until \texttt{CAL COMMIT}. &
+  \texttt{OK}, or \texttt{ERR} \\
+}
+
+\cmdtab{Receive path}{%
+\texttt{SET RXFILTER 0x}\textit{nn} & Sets the RX AM3153 filter (filter byte below). Saved. & \texttt{OK} \\
+\texttt{GET RXFILTER} & The RX filter byte. & e.g.\ \texttt{0x1C} \\
+}
+
+\par\medskip\noindent\begin{minipage}{\linewidth}% caption and table stay on one page
+\begin{center}
+\captionof{table}{The filter byte (\texttt{SET TXFILTER} / \texttt{SET RXFILTER}).}\label{tab:filter-byte}
+\vspace{0.4em}
+\begin{tabularx}{\linewidth}{|>{\raggedright\arraybackslash}p{0.27\linewidth}|X|}
+\hline
+Upper hex digit: the band & \texttt{0} = bypass (no filtering; the lower digit is ignored), \texttt{3} = band~1
+  (about 6--12\,GHz), \texttt{1} = band~2 (about 12--18\,GHz), \texttt{2} = band~3 (about 18--26\,GHz) \\
+Lower hex digit: the sub-state & \texttt{0} to \texttt{F}, which tunes the filter within its band \\
+Examples & \texttt{0x00} = bypass; \texttt{0x3E} = band~1, sub-state 14; \texttt{0x2F} = band~3, sub-state 15 \\
+\hline
+\end{tabularx}
+\end{center}
+\end{minipage}\par
+
+\cmdtab{Diagnostics (for troubleshooting; not needed in normal use)}{%
+\texttt{GET RESET CAUSE} & Why the microcontroller last restarted, as space-separated flags, e.g.\ \texttt{BOR} (brown-out) or \texttt{SFT} (software reset). &
+  e.g.\ \texttt{BOR} \\
+\texttt{GET USB PD CURRENT} & The current the USB-C power source advertises; the unit needs 1.5\,A. &
+  \texttt{NONE}, \texttt{DEFAULT}, \texttt{1.5A} or \texttt{3.0A} \\
+\texttt{INA ALARM CLEAR} & Clears a latched power-monitor alarm and turns the ALARM LED off. & \texttt{OK} \\
+\texttt{LMX REG}\textit{r}\texttt{?} & Reads synthesizer register \textit{r} (0 to 122). & e.g.\ \texttt{0x6070} \\
+\texttt{LMX REG}\textit{r} \textit{hhhh} & Writes synthesizer register \textit{r} with the bare hex value
+  \textit{hhhh}. For debugging only; not saved, and can leave the synthesizer misconfigured until the next
+  \texttt{LMX TUNE}. & \texttt{OK}, or \texttt{ERR} \\
+\texttt{TP}\textit{n}\texttt{?}, \texttt{TP}\textit{n} \texttt{ON} / \texttt{OFF} & Reads or sets on-board test point
+  \textit{n} (1 or 2). & \texttt{0}/\texttt{1}, or \texttt{OK} \\}
+\endgroup

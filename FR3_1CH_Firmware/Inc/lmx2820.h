@@ -47,6 +47,11 @@ LMX2820_LockStatus_t LMX2820_GetLockStatus(void);
  * serial command rather than a live debugger session. */
 uint16_t LMX2820_ReadRegisterRaw(uint8_t addr);
 
+/* Raw single-register SPI write (0-122), debug sessions only. Bypasses the
+ * firmware's frequency/mute bookkeeping (LMX FREQ? goes stale) and is not
+ * persisted; the next LMX2820_Tune() or unmute rewrites all 123 registers. */
+void LMX2820_WriteRegisterRaw(uint8_t addr, uint16_t data);
+
 /* Die temperature via R76's rb_TEMP_SENS field (TEMPSENSE_EN is enabled
  * permanently in the register template - see lmx2820.c). Per datasheet:
  * +-5C accuracy, 0.6C/code resolution - treat as approximate, not precise

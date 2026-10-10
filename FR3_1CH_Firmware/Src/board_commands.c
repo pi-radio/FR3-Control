@@ -3,8 +3,10 @@
 #include "board_io.h"
 #include "ina229.h"
 #include "lmx2820.h"
+#include "lo_control.h"
 #include "ltc2668.h"
 #include "main.h"
+#include "power_sequence.h"
 #include "rf_filter.h"
 #include "settings.h"
 #include "usb_pd_sink.h"
@@ -113,7 +115,9 @@ void Commands_ProcessLine(const char *line, char *response, size_t response_capa
   if (sscanf(line, "SET BOARD SERIAL %u%n", &board_serial_value, &matched_chars) == 1 && matched_chars == (int)strlen(line))
   {
     Settings_SetBoardSerial((uint32_t)board_serial_value);
-    Settings_Save();
+    /* Always written, even with PERSIST OFF - a factory serial must never be
+       silently dropped. */
+    Settings_SaveNow();
     snprintf(response, response_capacity, "OK\r\n");
     return;
   }
@@ -121,6 +125,29 @@ void Commands_ProcessLine(const char *line, char *response, size_t response_capa
   if (strcmp(line, "GET BOARD SERIAL") == 0)
   {
     snprintf(response, response_capacity, "%lu\r\n", (unsigned long)Settings_GetBoardSerial());
+    return;
+  }
+
+  /* Runtime flash-persistence switch for automated sweeps (see
+   * Settings_SetPersist()). Always ON after reset. "SET PERSIST ON" writes
+   * the current live state to flash immediately. */
+  if (strcmp(line, "SET PERSIST OFF") == 0)
+  {
+    Settings_SetPersist(false);
+    snprintf(response, response_capacity, "OK\r\n");
+    return;
+  }
+
+  if (strcmp(line, "SET PERSIST ON") == 0)
+  {
+    Settings_SetPersist(true);
+    snprintf(response, response_capacity, "OK\r\n");
+    return;
+  }
+
+  if (strcmp(line, "GET PERSIST") == 0)
+  {
+    snprintf(response, response_capacity, "%s\r\n", Settings_GetPersist() ? "ON" : "OFF");
     return;
   }
 
@@ -187,9 +214,17 @@ void Commands_ProcessLine(const char *line, char *response, size_t response_capa
     /* LO_CTRL_3V3 (PE8): 0 = internal LO, 1 = external via SMA. Switching
        internal also un-mutes the LMX2820; external mutes it, so the two
        paths never both drive the output. */
+#if BOARD_HAS_LO_CONTROL
+    /* 1.4.1: the internal TCXO is switched off while the LO is external - back on (and settled)
+       before the LMX2820 re-tunes against it. */
+    PowerSequence_SetTcxo(true);
+#endif
     HAL_GPIO_WritePin(LO_CTRL_3V3_GPIO_Port, LO_CTRL_3V3_Pin, GPIO_PIN_RESET);
     if (LMX2820_SetMute(false))
     {
+#if BOARD_HAS_LO_CONTROL
+      (void)LoControl_ApplyBiasNow();
+#endif
       Settings_Save();
       snprintf(response, response_capacity, "OK\r\n");
     }
@@ -204,6 +239,13 @@ void Commands_ProcessLine(const char *line, char *response, size_t response_capa
   {
     HAL_GPIO_WritePin(LO_CTRL_3V3_GPIO_Port, LO_CTRL_3V3_Pin, GPIO_PIN_SET);
     LMX2820_SetMute(true);
+#if BOARD_HAS_LO_CONTROL
+    /* 1.4.1: with an external LO the internal 10 MHz TCXO is unused - switch it off, so it stops
+       clocking the LMK00804B (its 10/20 MHz comb would otherwise still reach the RX IF). An
+       external 10 MHz reference (SET CLOCK EXT) still drives the LMK. Auto bias pauses (the
+       external LO's frequency is unknown); the last I/Q stay applied. */
+    PowerSequence_SetTcxo(false);
+#endif
     Settings_Save();
     snprintf(response, response_capacity, "OK\r\n");
     return;
@@ -312,8 +354,17 @@ void Commands_ProcessLine(const char *line, char *response, size_t response_capa
   matched_chars = -1;
   if (sscanf(line, "LMX TUNE %lf%n", &freq_double, &matched_chars) == 1 && matched_chars == (int)strlen(line))
   {
+#if BOARD_HAS_LO_CONTROL
+    if (freq_double >= 0.0)
+    {
+      LoControl_ApplyDriveFor((uint64_t)(freq_double + 0.5));
+    }
+#endif
     if (freq_double >= 0.0 && LMX2820_Tune((uint64_t)(freq_double + 0.5)))
     {
+#if BOARD_HAS_LO_CONTROL
+      (void)LoControl_ApplyBiasNow();
+#endif
       Settings_Save();
       snprintf(response, response_capacity, "OK\r\n");
     }
@@ -338,11 +389,54 @@ void Commands_ProcessLine(const char *line, char *response, size_t response_capa
     return;
   }
 
+  /* Debug only: raw register write, e.g. "LMX REG11 0612". Not persisted.
+   * Send bare hex digits: newlib's %x rejects a zero value with a 0X prefix. */
+  {
+    unsigned int reg_value = 0U;
+    matched_chars = -1;
+    if (sscanf(line, "LMX REG%u %x%n", &tp, &reg_value, &matched_chars) == 2 &&
+        matched_chars == (int)strlen(line))
+    {
+      if (tp <= 122U && reg_value <= 0xFFFFU)
+      {
+        LMX2820_WriteRegisterRaw((uint8_t)tp, (uint16_t)reg_value);
+        snprintf(response, response_capacity, "OK\r\n");
+      }
+      else
+      {
+        snprintf(response, response_capacity, "ERR\r\n");
+      }
+      return;
+    }
+  }
+
+#if BOARD_HAS_LO_CONTROL
+  /* 1.4.1 drive rule: AUTO (default) sets OUTA_PWR from the LO frequency on every tune - 0 for
+     LO <= 13 GHz, 2 for 13-20 GHz, 4 for >= 20 GHz. "LMX PWR n" switches to MANUAL. */
+  if (strcmp(line, "LMX PWR AUTO") == 0)
+  {
+    LoControl_SetPowerAuto(true);
+    LoControl_ApplyDriveFor(LMX2820_GetFrequency());
+    Settings_Save();
+    snprintf(response, response_capacity, "OK\r\n");
+    return;
+  }
+
+  if (strcmp(line, "LMX PWR MODE?") == 0)
+  {
+    snprintf(response, response_capacity, "%s\r\n", LoControl_GetPowerAuto() ? "AUTO" : "MANUAL");
+    return;
+  }
+#endif
+
   matched_chars = -1;
   if (sscanf(line, "LMX PWR %u%n", &pwr, &matched_chars) == 1 && matched_chars == (int)strlen(line))
   {
     if (pwr <= 7U)
     {
+#if BOARD_HAS_LO_CONTROL
+      LoControl_SetPowerAuto(false);
+#endif
       LMX2820_SetPower((uint8_t)pwr);
       Settings_Save();
       snprintf(response, response_capacity, "OK\r\n");
@@ -380,6 +474,9 @@ void Commands_ProcessLine(const char *line, char *response, size_t response_capa
   {
     if (LMX2820_SetMute(false))
     {
+#if BOARD_HAS_LO_CONTROL
+      (void)LoControl_ApplyBiasNow();
+#endif
       Settings_Save();
       snprintf(response, response_capacity, "OK\r\n");
     }
@@ -446,6 +543,9 @@ void Commands_ProcessLine(const char *line, char *response, size_t response_capa
   matched_chars = -1;
   if (sscanf(line, "SET I_V %lf%n", &volt_double, &matched_chars) == 1 && matched_chars == (int)strlen(line))
   {
+#if BOARD_HAS_LO_CONTROL
+    LoControl_SetBiasAuto(false);         /* a manual bias switches the auto bias off (IQBIAS AUTO) */
+#endif
     if (LTC2668_SetVoltageI(volt_double))
     {
       Settings_Save();
@@ -461,6 +561,9 @@ void Commands_ProcessLine(const char *line, char *response, size_t response_capa
   matched_chars = -1;
   if (sscanf(line, "SET Q_V %lf%n", &volt_double, &matched_chars) == 1 && matched_chars == (int)strlen(line))
   {
+#if BOARD_HAS_LO_CONTROL
+    LoControl_SetBiasAuto(false);
+#endif
     if (LTC2668_SetVoltageQ(volt_double))
     {
       Settings_Save();
@@ -489,6 +592,191 @@ void Commands_ProcessLine(const char *line, char *response, size_t response_capa
     return;
   }
 #endif /* BOARD_HAS_LTC2668 */
+
+#if BOARD_HAS_LO_CONTROL
+  /* ---- 1.4.1: per-unit cold/hot LO-null calibration (lo_control.c) ---- */
+  if (strcmp(line, "IQBIAS AUTO") == 0)
+  {
+    if (!LoControl_TableValid())
+    {
+      snprintf(response, response_capacity, "ERR NOCAL\r\n");
+      return;
+    }
+    LoControl_SetBiasAuto(true);
+    (void)LoControl_ApplyBiasNow();
+    Settings_Save();
+    snprintf(response, response_capacity, "OK\r\n");
+    return;
+  }
+
+  if (strcmp(line, "IQBIAS MANUAL") == 0)
+  {
+    LoControl_SetBiasAuto(false);
+    Settings_Save();
+    snprintf(response, response_capacity, "OK\r\n");
+    return;
+  }
+
+  /* "AUTO <state> I=<V> Q=<V> T=<C>" or "MANUAL I=<V> Q=<V>". state: ON (applied), NOCAL (no valid
+     table), EXTLO (external LO: paused), MUTED (LMX muted: paused). I/Q are the DAC's present values;
+     T is the die temperature the last auto bias was computed for. */
+  if (strcmp(line, "IQBIAS?") == 0)
+  {
+    char i_str[16];
+    char q_str[16];
+    char t_str[16];
+    double li, lq, lt;
+    bool lv;
+    const char *state = "ON";
+
+    FormatFixed6(LTC2668_GetVoltageI(), i_str);
+    FormatFixed6(LTC2668_GetVoltageQ(), q_str);
+    if (!LoControl_GetBiasAuto())
+    {
+      snprintf(response, response_capacity, "MANUAL I=%s Q=%s\r\n", i_str, q_str);
+      return;
+    }
+    LoControl_GetLastApplied(&li, &lq, &lt, &lv);
+    if (!LoControl_TableValid())
+    {
+      state = "NOCAL";
+    }
+#if BOARD_HAS_LO_SWITCH
+    else if (HAL_GPIO_ReadPin(LO_CTRL_3V3_GPIO_Port, LO_CTRL_3V3_Pin) == GPIO_PIN_SET)
+    {
+      state = "EXTLO";
+    }
+#endif
+    else if (LMX2820_GetMuted())
+    {
+      state = "MUTED";
+    }
+    FormatFixed1(lv ? lt : 0.0, t_str);
+    snprintf(response, response_capacity, "AUTO %s I=%s Q=%s T=%s\r\n", state, i_str, q_str, t_str);
+    return;
+  }
+
+  /* Upload, one entry per line (63-character line limit): CAL LO <idx 0-155> <C|H> <I_V> <Q_V> <T_C>.
+     Goes into a RAM staging copy; nothing is active until CAL COMMIT. */
+  {
+    unsigned int idx = 0U;
+    char which = 0;
+    double iv = 0.0, qv = 0.0, tc = 0.0;
+
+    matched_chars = -1;
+    if (sscanf(line, "CAL LO %u %c %lf %lf %lf%n", &idx, &which, &iv, &qv, &tc, &matched_chars) == 5 &&
+        matched_chars == (int)strlen(line))
+    {
+      bool ok = ((which == 'C') || (which == 'H')) &&
+                LoControl_StageEntry(idx, (which == 'H') ? LOCAL_TEMP_HOT : LOCAL_TEMP_COLD, iv, qv, tc);
+      snprintf(response, response_capacity, "%s", ok ? "OK\r\n" : "ERR\r\n");
+      return;
+    }
+
+    matched_chars = -1;
+    if (sscanf(line, "CAL LO? %u %c%n", &idx, &which, &matched_chars) == 2 && matched_chars == (int)strlen(line))
+    {
+      char i_str[16];
+      char q_str[16];
+      char t_str[16];
+
+      if (((which == 'C') || (which == 'H')) &&
+          LoControl_GetEntry(idx, (which == 'H') ? LOCAL_TEMP_HOT : LOCAL_TEMP_COLD, &iv, &qv, &tc))
+      {
+        FormatFixed6(iv, i_str);
+        FormatFixed6(qv, q_str);
+        FormatFixed1(tc, t_str);
+        snprintf(response, response_capacity, "%s %s %s\r\n", i_str, q_str, t_str);
+      }
+      else
+      {
+        snprintf(response, response_capacity, "ERR\r\n");
+      }
+      return;
+    }
+  }
+
+  if (strcmp(line, "CAL CLEAR") == 0)
+  {
+    LoControl_StageClear();
+    snprintf(response, response_capacity, "OK\r\n");
+    return;
+  }
+
+  {
+    unsigned int date = 0U;
+
+    matched_chars = -1;
+    if (sscanf(line, "CAL DATE %u%n", &date, &matched_chars) == 1 && matched_chars == (int)strlen(line))
+    {
+      LoControl_StageDate((uint32_t)date);
+      snprintf(response, response_capacity, "OK\r\n");
+      return;
+    }
+  }
+
+  if (strcmp(line, "CAL STAGED?") == 0)
+  {
+    snprintf(response, response_capacity, "%u\r\n", LoControl_StagedCount());
+    return;
+  }
+
+  /* Writes the staged table (all 312 entries required) to its flash sector, reads it back and
+     compares; becomes the active table. Not affected by SET PERSIST (always written). */
+  if (strcmp(line, "CAL COMMIT") == 0)
+  {
+    const char *err = LoControl_Commit(Settings_GetBoardSerial());
+
+    if (err == NULL)
+    {
+      (void)LoControl_ApplyBiasNow();
+      snprintf(response, response_capacity, "OK\r\n");
+    }
+    else
+    {
+      snprintf(response, response_capacity, "ERR %s\r\n", err);
+    }
+    return;
+  }
+
+  if (strcmp(line, "CAL INFO?") == 0)
+  {
+    unsigned n, fmt;
+    uint32_t sn, date;
+    bool crc_ok;
+
+    if (LoControl_GetInfo(&n, &fmt, &sn, &date, &crc_ok) || (n > 0U))
+    {
+      snprintf(response, response_capacity, "N=%u FMT=%u CRC=%s SN=%lu DATE=%lu\r\n", n, fmt, crc_ok ? "OK" : "BAD",
+               (unsigned long)sn, (unsigned long)date);
+    }
+    else
+    {
+      snprintf(response, response_capacity, "NONE\r\n");
+    }
+    return;
+  }
+
+  if (strcmp(line, "CAL TEMPS?") == 0)
+  {
+    double c0 = 0.0, c1 = 0.0, h0 = 0.0, h1 = 0.0;
+    char a[16], b[16], c[16], d[16];
+
+    if (LoControl_GetTempRange(LOCAL_TEMP_COLD, &c0, &c1) && LoControl_GetTempRange(LOCAL_TEMP_HOT, &h0, &h1))
+    {
+      FormatFixed1(c0, a);
+      FormatFixed1(c1, b);
+      FormatFixed1(h0, c);
+      FormatFixed1(h1, d);
+      snprintf(response, response_capacity, "C=%s..%s H=%s..%s\r\n", a, b, c, d);
+    }
+    else
+    {
+      snprintf(response, response_capacity, "ERR NOCAL\r\n");
+    }
+    return;
+  }
+#endif /* BOARD_HAS_LO_CONTROL */
 
   matched_chars = -1;
   if (sscanf(line, "TP%u?%n", &tp, &matched_chars) == 1 && matched_chars == (int)strlen(line))

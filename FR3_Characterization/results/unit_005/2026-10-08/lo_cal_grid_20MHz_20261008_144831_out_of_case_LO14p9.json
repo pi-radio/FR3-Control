@@ -1,0 +1,13 @@
+{
+  "script": "lo_cal_grid_scan.py",
+  "started": "2026-10-08T14:48:31",
+  "lo_start_ghz": 7.0,
+  "lo_stop_ghz": 22.5,
+  "step_mhz": 20.0,
+  "n_los": 1,
+  "lmx_power": 0,
+  "blocking_db": 40.0,
+  "zero_bias": false,
+  "null_span_hz": 1000000.0,
+  "setup": "BOARD OUT OF THE CASE (extra MCS pieces still on). FR1 1 / FR3 15.9 / upper -> LO 14.9 GHz. Source OFF (the scan switches it off before nulling). Null at the reference (least-loss) state, 1 MHz null span; that bias applied to every usable state. TX-side FR3 RF Out -> FR3 cable -> FieldFox; RX ports terminated. LMX drive 0."
+}

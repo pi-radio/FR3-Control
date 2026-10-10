@@ -214,3 +214,4 @@ class BankConfigFilterControl(QWidget):
         if self._populating:
             return
         self._on_change(self._current_value())
+        self.value_changed.emit(self._current_value())

@@ -1,0 +1,157 @@
+\clearpage
+\section{Phase Noise}
+\label{sec:phase-noise}
+\raggedbottom% this section's pages end naturally (flushbottom spread large gaps through the step list); restored at the end
+\input{sections/sec14_numbers}
+
+\textbf{A Motivating Example.} An ideal LO would be a perfect sine wave: all of its power at exactly one
+frequency, a single infinitely thin line on a spectrum analyzer. A real LO wobbles slightly in phase from moment
+to moment, and that wobble spreads a little of its power out into ``skirts'' on either side of the carrier.
+\emph{Phase noise} measures how much power sits in those skirts, at a given distance (the \emph{offset}) from
+the carrier, in a 1\,Hz bandwidth, relative to the carrier itself --- hence the unit dBc/Hz. For example,
+−90\,dBc/Hz at a 100\,kHz offset means that 100\,kHz away from the carrier, each 1\,Hz slice holds a
+billionth of the carrier's power. Lower is better.
+
+\textbf{Why it matters.} Every signal the unit up- or down-converts is multiplied by the LO, so the LO's
+skirts are copied onto every signal that passes through. On the transmit side they blur each transmitted
+subcarrier into its neighbors and smear the constellation of a modulated signal. On the receive side a strong
+signal on a nearby channel, mixed with the LO's skirts, lands on top of a weak wanted signal (``reciprocal
+mixing''). A single summary figure is the \emph{RMS phase error}: the total phase wobble, in degrees, integrated
+over all the measured offsets. Higher-order modulations (64-QAM and above) need it to be a fraction of a
+degree to a few degrees, depending on the signal.
+
+\textbf{How it's measured.} The LO is not brought out to a connector of its own, so it is measured through the
+small amount of it that leaks out of the ``TX-side FR3 RF Out'' connector, with nothing connected to the
+``TX-side FR1 IF In'' connector except a 50\,$\Omega$ termination. The leakage is a copy of the LO, so its
+phase noise is the LO's phase noise. Three steps make the measurement clean:\footnote{Measured with a Keysight
+UXA signal analyzer and its Phase Noise application (log-plot measurement, 100\,Hz to 1\,MHz offset, signal
+tracking on, 10 averages). The analyzer's own phase noise is well below the unit's at every offset shown.}
+\begingroup\setlength{\leftmargini}{2.2em}\setlength{\topsep}{0.4em}% indent slightly; fixed (non-stretching) spacing
+\begin{enumerate}\setlength{\itemsep}{0.4em}\setlength{\parsep}{0pt}
+  \item \textbf{A fixed, moderate carrier level.} The I/Q DC bias described in Section~\ref{sec:lo-suppression}
+        is moved slightly away from its LO-null point until the leakage at the ``TX-side FR3 RF Out'' connector
+        is exactly 0\,dBm --- strong enough to measure well, and well below the level at which the TX chain
+        starts to compress.
+  \item \textbf{A filter that passes only the LO.} The LMX2820 synthesizer produces one other tone besides the
+        LO. Up to 11.3\,GHz its oscillator drives the output directly, so its second harmonic (twice the LO
+        frequency) is present; above 11.3\,GHz the output is the oscillator's frequency doubled, so the
+        oscillator's own frequency (half the LO frequency) is present. At each LO frequency the AM3153 filter
+        is set to pass the LO and block that other tone, so the analyzer measures the LO and nothing
+        else.\footnote{The filter is chosen with the same two-step rule as the ``optimal'' filter of
+        Section~\ref{sec:sideband-suppression}: keep the LO within 3\,dB of the best available, then block the
+        unwanted tone as much as possible. With the filter in place, the unwanted tone sat between
+        \pnUnwantedMin{} and \pnUnwantedMax\,dB below the LO at the ``TX-side FR3 RF Out'' connector.}
+  \item \textbf{Time to settle.} After each retune, the synthesizer is given 5\,s to settle fully before the
+        measurement starts.
+\end{enumerate}
+\endgroup
+
+\textbf{What's plotted.} \pnCount{} LO frequencies, from \pnLoLow{} to \pnLoHigh\,GHz in 2\,GHz steps, each in
+its own figure: phase noise against offset from the carrier, from 100\,Hz to 1\,MHz. Every curve is the average of
+10 complete measurements. Each figure shows that average twice: the thin line is the average as measured
+(unsmoothed), and the thick line is the analyzer's lightly smoothed version of it, which makes the trend easier
+to read. The figures follow on the next page; the values marked at every decade offset, the table after them, and
+the RMS phase error all come from the smoothed curve.\footnote{All measurements use the unit's own
+10\,MHz TCXO and internal LMX2820 synthesizer, the default configuration.}
+
+\clearpage
+% Page of its own: all eight per-LO figures (user layout, 2026-10-04). Section-local, slightly narrower figpair
+% so four rows fit on one page; scoped so the document-wide \figpair is unchanged.
+\begingroup
+\renewcommand{\figpair}[6]{%
+  \noindent
+  \begin{minipage}[t]{0.44\linewidth}\centering\includegraphics[width=\linewidth]{#1}\captionof{figure}{#2}\label{#3}\end{minipage}\hfill
+  \begin{minipage}[t]{0.44\linewidth}\centering\includegraphics[width=\linewidth]{#4}\captionof{figure}{#5}\label{#6}\end{minipage}
+  \par\vspace{0.6em}
+}
+\figpair{images/sec14_fig1.pdf}{LO = 8\,GHz.}{fig:14-1}%
+        {images/sec14_fig2.pdf}{LO = 10\,GHz.}{fig:14-2}
+\figpair{images/sec14_fig3.pdf}{LO = 12\,GHz.}{fig:14-3}%
+        {images/sec14_fig4.pdf}{LO = 14\,GHz.}{fig:14-4}
+\figpair{images/sec14_fig5.pdf}{LO = 16\,GHz.}{fig:14-5}%
+        {images/sec14_fig6.pdf}{LO = 18\,GHz.}{fig:14-6}
+\figpair{images/sec14_fig7.pdf}{LO = 20\,GHz.}{fig:14-7}%
+        {images/sec14_fig8.pdf}{LO = 22\,GHz.}{fig:14-8}
+\endgroup
+\clearpage
+
+\par\medskip\noindent\begin{minipage}{\linewidth}% caption and table stay on one page
+\begin{center}
+\captionof{table}{Phase noise of the internal LO at each decade offset, read from the smoothed curves of
+Figures~\ref{fig:14-1}--\ref{fig:14-8}, and the RMS phase error integrated from 100\,Hz to 1\,MHz.}\label{tab:14-1}
+\vspace{0.4em}
+\input{sections/sec14_table}
+\end{center}
+\end{minipage}\par
+
+\textbf{Reading the curves.} Three features are worth noticing. First, every curve has the same shape, and
+the whole curve moves up as the LO frequency goes up: from \pnLoLow{} to \pnLoHigh\,GHz the phase noise rises
+by \pnScaleMin{} to \pnScaleMax\,dB at every offset. This is expected: multiplying a frequency by N multiplies its
+phase wobble by N too, which raises phase noise by 20·log\textsubscript{10}(N), and
+20·log\textsubscript{10}(\pnLoHigh/\pnLoLow) = \pnScaleExpected\,dB. The same rule sets the close-in part of each
+curve: the LO is locked to a 10\,MHz reference, so close to the carrier it inherits that reference's phase noise
+multiplied up by the ratio of the two frequencies --- at 10\,GHz, a factor of 1000, or +60\,dB. Second, beyond
+roughly 200\,kHz every curve falls steeply: that is where the synthesizer's control loop stops following the
+reference and the curve takes on the oscillator's own, falling, phase noise. Third, the RMS phase error grows
+with frequency for the same reason, from \pnRmsLow\textdegree{} at \pnLoLow\,GHz to \pnRmsHigh\textdegree{} at
+\pnLoHigh\,GHz. In practice: for the lowest phase noise, use the lowest LO frequency your FR1 and FR3 choices
+allow.
+
+\textbf{A cleaner LO: the OctoLO.} When phase noise matters most, the unit's own synthesizer can be bypassed
+entirely: selecting External LO (Section~\ref{sec:hw-clock-lo}) routes a signal from the ``LO In'' connector to
+both mixers instead. Figure~\ref{fig:14-9} compares the internal LO at 10\,GHz with the Pi-Radio OctoLO tuned to
+the same frequency, measured with identical analyzer settings.\footnote{The OctoLO was connected directly to the
+analyzer, so this figure shows the source itself. Near 1\,kHz its phase noise comes close to the analyzer's own,
+so its true value there may be slightly lower still.} From 100\,Hz to 100\,kHz the OctoLO is \pnOctoGainMin{} to
+\pnOctoGainMax\,dB quieter, and its RMS phase error is \pnOctoRms\textdegree{} instead of
+\pnBoardTenRms\textdegree{} --- about \pnOctoRmsRatio{} times lower.
+
+\figrow{\pnOctoFig}{LO = 10\,GHz: the internal LO compared with the Pi-Radio OctoLO. Thick lines are smoothed,
+thin lines unsmoothed; both are the average of 10 measurements.}{fig:14-9}
+
+\clearpage % start this discussion on a fresh page (it otherwise left a single line at the foot of page 38)
+\textbf{What RMS phase error means for a modulation.} Picture a constellation diagram. Every symbol the
+receiver gets is a dot, and the receiver decides which symbol was sent by checking which ideal point the dot is
+closest to. Phase noise makes the whole constellation twist back and forth around its center, like a wheel being
+jiggled: every dot slides sideways along a circle, and the RMS phase error is how far, in degrees, that twist
+typically goes. A twist only causes an error once it carries a dot closer to a neighboring point than to its
+own. BPSK has just two points, on opposite sides of the circle, so it shrugs off large twists; QPSK has four, a
+quarter turn apart; 16-QAM, 64-QAM, and 256-QAM pack ever more points into the same space, with their outer
+points crowded closest together around the circle, so each step up tolerates less twist. Wireless standards
+such as 5G NR capture this by limiting how far, on average, the received dots may stray from their ideal positions --- the
+error vector magnitude (EVM), a percentage of the signal's size --- with a tighter limit for each denser
+modulation. Translating each limit into degrees of twist gives the most RMS phase error each modulation could
+tolerate if phase noise were the \emph{only} thing disturbing it:
+\par\medskip\noindent\begin{minipage}{\linewidth}% caption and table stay on one page
+\begin{center}
+\captionof{table}{EVM limit of each modulation, and the RMS phase error it would allow if phase noise were the only impairment.}\label{tab:evm-phase}
+\vspace{0.4em}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Modulation} & \textbf{EVM limit} & \textbf{RMS phase error, if it were the only impairment} \\
+\midrule
+QPSK & 17.5\% & about 10\textdegree \\
+16-QAM & 12.5\% & about 7\textdegree \\
+64-QAM & 8\% & about 4.6\textdegree \\
+256-QAM & 3.5\% & about 2.0\textdegree \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{minipage}\par
+In a real link, phase noise must share that budget with everything else (thermal noise, nonlinearity, I/Q
+imbalance), and both ends of the link contribute their own LO's phase noise, so a comfortable design keeps phase
+noise to well under half of these limits. Against that yardstick, the internal LO (\pnRmsLow\textdegree{} at
+\pnLoLow\,GHz up to \pnRmsHigh\textdegree{} at \pnLoHigh\,GHz) supports QPSK to 64-QAM comfortably at every LO
+frequency, while 256-QAM is within reach only at the lower LO frequencies and becomes tight toward the top of the
+range. The OctoLO, at \pnOctoRms\textdegree{}, leaves ample margin even for 256-QAM.\footnote{The RMS phase error
+here is integrated from 100\,Hz to 1\,MHz offset. OFDM receivers track and remove much of the slow, close-in phase
+wobble, which makes the close-in part matter less; phase noise beyond 1\,MHz, not included here, adds a little.
+The comparison above is a guide to where each LO's limits lie, not a link budget.}
+
+\textbf{An Acknowledgement.} Pi-Radio does not own phase noise measurement equipment. The measurements in this
+section were made for us by Prof.\ Hamed Rahmani at New York University, on his lab's Keysight N9042B UXA signal
+analyzer. We are grateful for his help. The analyzer's phase noise measurement software was a donation from
+Keysight, and we are grateful to Keysight too.
+
+\clearpage
+\flushbottom

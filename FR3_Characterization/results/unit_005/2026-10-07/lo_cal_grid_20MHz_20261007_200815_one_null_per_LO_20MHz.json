@@ -1,0 +1,12 @@
+{
+  "script": "lo_cal_grid_scan.py",
+  "started": "2026-10-07T20:08:15",
+  "lo_start_ghz": 7.0,
+  "lo_stop_ghz": 22.5,
+  "step_mhz": 20.0,
+  "n_los": 776,
+  "lmx_power": 0,
+  "blocking_db": 40.0,
+  "zero_bias": false,
+  "setup": "Case closed, fan on. TX-side FR3 RF Out -> FR3 cable -> FieldFox; RX-side FR3 RF In and RX-side FR1 IF Out terminated; FieldFox source cable on TX-side FR1 IF In, source OFF. LMX drive 0."
+}

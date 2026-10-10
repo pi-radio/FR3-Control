@@ -1,0 +1,39 @@
+\clearpage
+\section{TX-side Compression and Safety --- Upper Sideband}
+\label{sec:compression-upper}
+
+\textbf{What's plotted, and why it matters.} This section shows how the unit's transmitter responds as you
+drive it harder. At 9 representative (FR1, FR3) points, the input power was swept upward from −60\,dBm until the gain had
+dropped 5\,dB below its small-signal value (or the 0\,dBm limit of the test source was reached), with the same ``optimal''
+filter-selection algorithm described in Section~\ref{sec:sideband-suppression}.\footnote{Every point on every curve is a real measurement,
+never a simulation or an interpolation between sparse samples.} At low input power, the output just scales
+linearly with the input --- this is the small-signal gain, shown as the dashed line and labeled directly on
+each panel. Push the input harder, and the amplifiers can't keep up: the real curve bends away below that line.
+This is called compression. P1dB marks where the gain has dropped 1\,dB below its small-signal value; P3dB
+marks where it has dropped 3\,dB. Driving past P1dB starts to distort your signal, and driving well past P3dB
+risks damaging the unit. Together, these two points tell you the safe input power range for this unit ---
+knowing them is essential before connecting any real transmit signal.
+
+\textbf{Measurement conditions.} \lmxDriveRule{} (set from the LO frequency), with the LO leakage suppressed by the unit's stored LO-null calibration (Section~\ref{sec:lo-suppression}), exactly as in normal use. The small-signal gain is taken from the readings between −50 and −46\,dBm at the source, because the test source is less accurate in its lowest few dB. The unit was measured hot, as the worst case: no fan, LMX2820 die at \condCompMinC--\condCompMaxC\textdegree C. A cooler unit will typically do somewhat better.
+
+\textbf{Gain expansion before compression.} For some configurations, you'll notice the measured gain briefly
+\emph{rises} above its small-signal value before it eventually compresses --- the curve bulges above the dashed
+line rather than only bending below it.\footnote{This is normal, expected behavior for this unit, not a
+measurement error. The board's final-stage power amplifier (Analog Devices ADL9006) is a cascode distributed
+pHEMT amplifier, a class well known for exactly this kind of non-monotonic gain-vs-drive behavior. You can see
+the same effect directly in the ADL9006's own published datasheet (Figures 21, 22, 24, and 25: P\textsubscript{out},
+Gain, PAE, and I\textsubscript{DD} vs.\ input power, at 2, 10, 20, and 26\,GHz), where the gain trace rises before it
+falls. Most introductory textbooks only describe gain compression and skip gain expansion entirely --- so if
+this is the first time you've seen it, that is expected too.} You can see the same effect directly in the
+ADL9006's own published datasheet.
+
+\figpair{images/sec4_fig1.pdf}{FR1 = 1.0\,GHz, FR3 = 9.0\,GHz. Filter: 0x3E.}{fig:4-1}%
+        {images/sec4_fig2.pdf}{FR1 = 2.0\,GHz, FR3 = 9.0\,GHz. Filter: 0x3D.}{fig:4-2}
+\figpair{images/sec4_fig3.pdf}{FR1 = 3.5\,GHz, FR3 = 11.5\,GHz. Filter: 0x3E.}{fig:4-3}%
+        {images/sec4_fig4.pdf}{FR1 = 1.0\,GHz, FR3 = 13.0\,GHz. Filter: 0x1C.}{fig:4-4}
+\figpair{images/sec4_fig5.pdf}{FR1 = 2.0\,GHz, FR3 = 15.0\,GHz. Filter: 0x1E.}{fig:4-5}%
+        {images/sec4_fig6.pdf}{FR1 = 3.0\,GHz, FR3 = 17.0\,GHz. Filter: 0x22.}{fig:4-6}
+
+\figpair{images/sec4_fig7.pdf}{FR1 = 1.0\,GHz, FR3 = 19.0\,GHz. Filter: 0x2B.}{fig:4-7}%
+        {images/sec4_fig8.pdf}{FR1 = 2.0\,GHz, FR3 = 22.0\,GHz. Filter: 0x2E.}{fig:4-8}
+\figonesmall{images/sec4_fig9.pdf}{FR1 = 3.5\,GHz, FR3 = 23.5\,GHz. Filter: 0x2F. Tip: this configuration compresses early (output P1dB +8.1\,dBm, against +14 to +18\,dBm at most other points). Near the top of the IF band (FR1~=~3.5\,GHz) with a high LO, TX compression starts earlier; if you need more output power, use a lower FR1 for the same FR3. Running the unit cooler helps only a little: with the LMX2820 die at about 60\textdegree C instead of 83\textdegree C, the output P1dB here rose by about 3\,dB (from +8.1 to +11.3\,dBm).}{fig:4-9}

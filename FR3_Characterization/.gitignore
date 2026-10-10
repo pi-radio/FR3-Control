@@ -1,0 +1,37 @@
+.venv/
+__pycache__/
+# results/ stays ignored, except the flatness campaigns' summaries (see the rules below)
+results/**
+!results/**/
+!results/unit_*/flatness_*/*.csv
+!results/unit_*/flatness_*/campaign.json
+# LO-null calibrations, every unit and date (tables, per-filter readings, run settings): never lose these
+!results/unit_*/**/lo_cal_grid_*_table.csv
+!results/unit_*/**/lo_cal_grid_*_states.csv
+!results/unit_*/**/lo_cal_grid_*.json
+# Data behind the datasheet figures (the gain runs' raw traces.csv, 13 MB, stay local)
+!results/unit_*/gain_*/points.csv
+!results/unit_*/gain_*/cal.csv
+!results/unit_*/gain_*/campaign.json
+!results/unit_*/sideband_*/*.csv
+!results/unit_*/sideband_*/campaign.json
+!results/unit_*/compression_*/*.csv
+!results/unit_*/compression_*/campaign.json
+!results/unit_*/image_*/*.csv
+!results/unit_*/image_*/campaign.json
+!results/unit_*/rx_nf_*/*.csv
+!results/unit_*/phase_noise/*.csv
+!results/unit_005/2026-10-07/tx_2lo_type4_*.csv
+!results/unit_005/2026-10-07/tx_2lo_type4_*.json
+!results/unit_*/**/rx_port_leakage_*.csv
+!results/unit_*/**/rx_port_leakage_*.json
+!results/external_lo/octolo_*.csv
+# Production tests (results, comparison reports, the chain scripts that ran them)
+!results/unit_*/production_*/**/*.csv
+!results/unit_*/production_*/**/*.json
+!results/unit_*/production_*/**/*.md
+!results/unit_*/production_*/**/*.ps1
+# Raw swept traces never go into git history (repo size). The ones behind the datasheet figures are zipped into
+# FR3-datasheet-data-r<n>.zip and attached to that datasheet's GitHub release, next to the PDF.
+results/**/traces.csv
+FR3-datasheet-data-*.zip

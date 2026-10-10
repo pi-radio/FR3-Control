@@ -18,6 +18,8 @@ class BoardCapabilities:
     has_lo_switch: bool = False
     has_iq_swap: bool = False
     has_rf_filters: bool = False
+    # Firmware 1.4.1 drive rule + per-unit LO-null calibration (board_config.h BOARD_HAS_LO_CONTROL)
+    has_lo_control: bool = False
 
 
 _TABLE: dict[tuple[str, str], BoardCapabilities] = {
@@ -36,6 +38,7 @@ _TABLE: dict[tuple[str, str], BoardCapabilities] = {
         has_lo_switch=True,
         has_iq_swap=True,
         has_rf_filters=True,
+        has_lo_control=True,
     ),
     ("OctoLO", "1.4"): BoardCapabilities(
         has_lmx2820=True,

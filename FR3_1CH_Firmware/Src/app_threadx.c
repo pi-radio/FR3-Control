@@ -23,6 +23,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "lo_control.h"
 
 /* USER CODE END Includes */
 
@@ -63,6 +64,8 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
 
   /* USER CODE END App_ThreadX_MEM_POOL */
   /* USER CODE BEGIN App_ThreadX_Init */
+  /* 1.4.1: hardware lock + the 2 s LO-null auto-bias thread (lo_control.c). */
+  ret = LoControl_ThreadCreate();
   /* USER CODE END App_ThreadX_Init */
 
   return ret;

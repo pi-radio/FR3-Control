@@ -1,0 +1,75 @@
+\clearpage
+\section{Tips for Correct Usage}
+\label{sec:tips}
+
+Using the Pi-Radio FR3-1ch is easy: pick your FR1 and FR3 center frequencies (and, on TX, the sideband), and it just
+works --- the unit works out the LO frequency, switch states, and LO-null bias on its own. A few corner cases are
+worth knowing about, though, because in them your choice of configuration makes a real difference. Each is
+described below, with what to do about it and where in this datasheet it is measured.
+
+\textbf{Before going over the air, check the regulations.} Before transmitting from an antenna, make sure your
+signal meets every regulation that applies where you operate it --- including the permitted frequencies,
+bandwidth, transmit power, and emissions outside your channel --- and that you hold any license it requires. Staying
+within the rules is the operator's responsibility, and Pi-Radio is not responsible for any regulatory violation.
+
+\textbf{Protect the unit from static (ESD).} The unit is static-sensitive: some of the parts inside it can be damaged by an
+electrostatic discharge of under 150\,V (Table~\ref{tab:summary-absmax}), far less than a person can build up just
+by walking across a room, and well below what you can feel. The damage is not always obvious: a part can keep working
+but with degraded performance. We strongly recommend using the system in its box, as shipped: there is then never a
+reason to touch the board itself, and the connectors are the only way a discharge can reach it. So take care each time
+you connect something. Work on a grounded anti-static mat, wearing a grounded wrist strap; if you have neither, at
+least touch grounded metal first. Before connecting any cable to any connector, touch the cable's outer shell to
+ground, so that any charge it has picked up drains away there rather than through the unit; this matters most for
+cables from an antenna or from other equipment.
+
+\textbf{Keep the input within the linear range.} Each chain is linear only up to its input P1dB, which depends on
+the (FR1, FR3) combination: Sections~\ref{sec:compression-upper} and \ref{sec:compression-lower} give it for TX,
+Sections~\ref{sec:rx-compression-lowside} and \ref{sec:rx-compression-highside} for RX, and the Key Specifications
+page summarizes the range. Drive the unit past it and the signal distorts. Separately, never exceed the absolute
+maximum input levels on the Key Specifications page.
+
+\textbf{The lower sideband (TX) and high-side LO (RX) mirror the spectrum.} With the TX lower sideband, or equivalently
+a high-side LO on RX, the signal's spectrum comes out flipped: a feature at the top of the FR1 band lands at the
+bottom of the FR3 band, and vice versa (Section~\ref{sec:hardware-primer}). Most receivers can undo this (for example
+by conjugating the baseband samples), but your system has to know about it.
+
+\textbf{When to engage the AM3153 filter.} The filter is what suppresses the unwanted sideband on TX
+(Section~\ref{sec:sideband-suppression}) and the image on RX (Section~\ref{sec:rx-image-rejection}); with it
+bypassed, both are poor. Its cost is some conversion gain, and on RX a higher noise figure
+(Section~\ref{sec:rx-noise-figure}). Engage it whenever the unwanted sideband or image matters; bypass it only when
+you need the lowest possible RX noise figure and know that nothing is transmitting in the image band.
+
+\textbf{An interferer sits on the RX image.} The RX receives both LO\,+\,FR1 and LO\,$-$\,FR1, and one of them is
+the image (Section~\ref{sec:rx-image-rejection}). If a known interferer sits on the image, switch to the other LO
+side: the LO, and with it the image, moves by twice the FR1 frequency, away from the interferer.
+
+\textbf{Image rejection is weakest at low FR1.} At low FR1 the wanted signal and its image are close together, so
+the filter has a harder time separating them. If image rejection matters, use a higher FR1 for the same FR3
+(Section~\ref{sec:rx-image-rejection}).
+
+\textbf{Avoid an LO at exactly twice the FR1.} When the LO is exactly twice the FR1 frequency, a spurious mixing
+product lands on the wanted IF and RX image rejection drops sharply (Section~\ref{sec:rx-image-rejection}). Avoid
+that exact configuration, or choose the sideband so that the LO stays at 9\,GHz or above.
+
+\textbf{RX noise figure is worse with the LO at 14--14.5\,GHz.} With the LO at 14.0 or 14.5\,GHz, the RX noise figure
+is typically 4 to 5\,dB worse than at neighboring LO frequencies (Section~\ref{sec:rx-noise-figure}). This only
+matters for weak signals near the noise floor; if that is your case, switch to the other LO side, which moves the
+LO by twice the FR1 frequency.
+
+\textbf{Weak CW signals on a 10\,MHz grid.} The RX IF output carries a weak comb of tones at multiples of 10\,MHz
+(Section~\ref{sec:rx-noise-figure}). It matters only for an extremely weak CW signal that lands exactly on that grid;
+if yours does, move the IF (or the LO) by a few hundred kHz.
+
+\keepnext{5\baselineskip}% the whole paragraph moves to the next page rather than split
+\textbf{Phase noise rises with the LO frequency.} The LO's phase noise grows with its frequency
+(Section~\ref{sec:phase-noise}). For the highest-order modulations (256-QAM), choose the FR1 and sideband that put
+the LO as low as possible, or use an external low-noise LO such as the Pi-Radio OctoLO via the ``LO In'' connector.
+
+\textbf{LO suppression depends on temperature.} The LO-null bias is calibrated at two temperatures and interpolated at
+runtime from the LMX2820's die temperature (Section~\ref{sec:lo-suppression}). LO suppression is best once the unit
+has reached a steady temperature after power-up, and with the LMX die between the two calibrated temperatures. Keep
+the LMX die below 100\,\textdegree C in any case.
+
+\textbf{Stay inside the design range.} The unit is rated for FR3 up to 24\,GHz and FR1 from 0.7 to 4.0\,GHz.
+Measurements beyond these limits are shown throughout this datasheet, boxed in red, and the unit still works there,
+but its performance outside them is not guaranteed.

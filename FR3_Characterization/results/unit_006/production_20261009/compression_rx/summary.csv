@@ -1,0 +1,4 @@
+side,fr1_ghz,fr3_ghz,lo_ghz,rx_filter_bits,lmx_power,tx_i_v,tx_q_v,tx_iq,tx_filter_bits,small_signal_gain_db,p1db_in_dbm,p1db_out_dbm,p3db_in_dbm,p3db_out_dbm,max_input_dbm,stop_reason,lmx_temp_c,time
+low,1,9,8,0x3E,0,0.01995,0.06130,THRU,0x3E,52.55,-33.44,18.1,-28.83,20.71,-26.473,reached 5.0 dB compression,63.6,2026-10-09T17:26:53-04:00
+low,2,22,20,0x2E,4,-0.01324,-0.00225,THRU,0x2E,42.30,-28.39,12.91,-23.11,16.19,-19.564,reached 5.0 dB compression,66.1,2026-10-09T17:28:11-04:00
+high,2,14,16,0x14,2,-0.04170,0.03834,SWAP,0x14,38.84,-24.92,12.91,-19.62,16.22,-16.215,reached 5.0 dB compression,66.9,2026-10-09T17:29:31-04:00

@@ -1,0 +1,14 @@
+{
+  "script": "rx_image_campaign.py",
+  "lmx_power": "drive rule",
+  "input_dbm_at_connector": -50.0,
+  "tx_side": "normal use (rx_tx_side.py)",
+  "bias": "cal tables: results\\unit_005\\2026-10-09\\lo_cal_grid_100MHz_20261009_112919_full_cal_cold_drive_rule_table.csv / results\\unit_005\\2026-10-09\\lo_cal_grid_100MHz_20261009_022928_full_cal_hot_drive_rule_table.csv",
+  "reading": "IF tone at FR1: 1 MHz span, RBW 10 kHz, 30 dB att, no averaging, peak search; cables removed",
+  "runs": [
+    {
+      "started": "2026-10-09T14:43:32-04:00",
+      "ff_idn": "Keysight Technologies,N9918B,MY63185042,A.13.25"
+    }
+  ]
+}

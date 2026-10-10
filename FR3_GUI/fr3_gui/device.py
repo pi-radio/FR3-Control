@@ -110,6 +110,16 @@ class Device:
     def get_lmx_power(self) -> int:
         return int(self._query("LMX PWR?"))
 
+    # ---- 1.4.1 drive rule (rev 1.4: BoardCapabilities.has_lo_control) ----
+
+    def set_lmx_power_auto(self) -> bool:
+        """AUTO drive: the firmware sets OUTA_PWR from the LO frequency on every tune (0 for LO <= 13
+        GHz, 2 for 13-20 GHz, 4 for >= 20 GHz). set_lmx_power() switches back to MANUAL."""
+        return self._query_ok("LMX PWR AUTO")
+
+    def get_lmx_power_auto(self) -> bool:
+        return self._query("LMX PWR MODE?") == "AUTO"
+
     def set_lmx_mute(self, mute: bool) -> bool:
         return self._query_ok(f"LMX MUTE {'ON' if mute else 'OFF'}")
 
@@ -132,6 +142,14 @@ class Device:
         """Raw single-register readback (debug/bring-up command), addr 0-122."""
         return int(self._query(f"LMX REG{addr}?"), 16)
 
+    def write_lmx_register(self, addr: int, value: int) -> bool:
+        """Raw single-register write (debug sessions only), addr 0-122. Not
+        persisted; LMX FREQ? goes stale and the next LMX TUNE rewrites all
+        registers from the firmware template."""
+        # Bare hex digits: the firmware's newlib scanf rejects a zero value
+        # written with a 0X prefix ("0X0000").
+        return self._query_ok(f"LMX REG{addr} {value:04X}")
+
     # ---- LTC2668 I/Q DAC ----
 
     def set_i_v(self, volts: float) -> bool:
@@ -145,6 +163,84 @@ class Device:
 
     def get_q_v(self) -> float:
         return float(self._query("GET Q_V"))
+
+    # ---- 1.4.1 per-unit LO-null calibration (rev 1.4: BoardCapabilities.has_lo_control) ----
+
+    def set_iq_bias_auto(self, auto: bool) -> bool:
+        """AUTO: the firmware applies the unit's stored cold/hot calibration, interpolated to the LMX
+        temperature, on every tune and every 2 s. Fails (False) with no calibration stored. A manual
+        set_i_v()/set_q_v() also switches to MANUAL."""
+        return self._query_ok("IQBIAS AUTO" if auto else "IQBIAS MANUAL")
+
+    def get_iq_bias(self) -> dict:
+        """{'auto': bool, 'state': 'ON'|'NOCAL'|'EXTLO'|'MUTED'|'' (manual), 'i_v': float, 'q_v': float,
+        'temp_c': float|None} from "AUTO ON I=0.019950 Q=0.061300 T=63.6" / "MANUAL I=... Q=...". """
+        text = self._query("IQBIAS?")
+        words = text.split()
+        if not words or words[0] not in ("AUTO", "MANUAL"):
+            raise DeviceError(f"Unexpected IQBIAS? response on {self.port_name}: {text!r}")
+        fields = dict(w.split("=", 1) for w in words if "=" in w)
+        try:
+            return {"auto": words[0] == "AUTO", "state": words[1] if words[0] == "AUTO" else "",
+                    "i_v": float(fields["I"]), "q_v": float(fields["Q"]),
+                    "temp_c": float(fields["T"]) if "T" in fields else None}
+        except (KeyError, ValueError, IndexError) as exc:
+            raise DeviceError(f"Unexpected IQBIAS? response on {self.port_name}: {text!r}") from exc
+
+    def get_cal_info(self) -> dict | None:
+        """None if no calibration is stored, else {'n': int, 'format': int, 'crc_ok': bool, 'serial': int,
+        'date': int} from "N=312 FMT=1 CRC=OK SN=6 DATE=20261010". """
+        text = self._query("CAL INFO?")
+        if text == "NONE":
+            return None
+        try:
+            f = dict(w.split("=", 1) for w in text.split())
+            return {"n": int(f["N"]), "format": int(f["FMT"]), "crc_ok": f["CRC"] == "OK",
+                    "serial": int(f["SN"]), "date": int(f["DATE"])}
+        except (KeyError, ValueError) as exc:
+            raise DeviceError(f"Unexpected CAL INFO? response on {self.port_name}: {text!r}") from exc
+
+    def get_cal_temps(self) -> dict | None:
+        """{'cold': (min, max), 'hot': (min, max)} in C from "C=61.0..67.8 H=73.8..85.3", or None."""
+        text = self._query("CAL TEMPS?")
+        if text.startswith("ERR"):
+            return None
+        try:
+            f = dict(w.split("=", 1) for w in text.split())
+            pair = lambda v: tuple(float(x) for x in v.split(".."))
+            return {"cold": pair(f["C"]), "hot": pair(f["H"])}
+        except (KeyError, ValueError) as exc:
+            raise DeviceError(f"Unexpected CAL TEMPS? response on {self.port_name}: {text!r}") from exc
+
+    # Upload (production; not used by the GUI itself). One entry per command - the firmware's
+    # 63-character line limit. Nothing is active until cal_commit().
+
+    def cal_clear(self) -> bool:
+        return self._query_ok("CAL CLEAR")
+
+    def cal_set_entry(self, idx: int, hot: bool, i_v: float, q_v: float, temp_c: float) -> bool:
+        return self._query_ok(f"CAL LO {idx} {'H' if hot else 'C'} {i_v:.6f} {q_v:.6f} {temp_c:.1f}")
+
+    def cal_set_date(self, yyyymmdd: int) -> bool:
+        return self._query_ok(f"CAL DATE {yyyymmdd}")
+
+    def cal_staged_count(self) -> int:
+        return int(self._query("CAL STAGED?"))
+
+    def cal_commit(self) -> str:
+        """'OK', or the firmware's 'ERR <reason>' (INCOMPLETE / FLASH / VERIFY)."""
+        return self._query("CAL COMMIT")
+
+    def cal_get_entry(self, idx: int, hot: bool) -> tuple[float, float, float] | None:
+        """(I_V, Q_V, temperature C) of the stored (flash) table, or None."""
+        text = self._query(f"CAL LO? {idx} {'H' if hot else 'C'}")
+        if text.startswith("ERR"):
+            return None
+        try:
+            i_v, q_v, t = (float(x) for x in text.split())
+            return i_v, q_v, t
+        except ValueError as exc:
+            raise DeviceError(f"Unexpected CAL LO? response on {self.port_name}: {text!r}") from exc
 
     # ---- Clock / LO / IQ swap ----
 

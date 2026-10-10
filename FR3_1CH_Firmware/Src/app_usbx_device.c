@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 #include <string.h>
 #include "board_commands.h"
+#include "lo_control.h"
 #include "usb.h"
 /* USER CODE END Includes */
 
@@ -440,7 +441,10 @@ static VOID app_ux_device_thread_entry(ULONG thread_input)
         if (line_length > 0)
         {
           CmdHistory_Push(line_buffer);
+          /* 1.4.1: serialize board hardware access with the LO-null auto-bias thread. */
+          LoControl_Lock();
           Commands_ProcessLine(line_buffer, response, sizeof(response));
+          LoControl_Unlock();
           ux_device_class_cdc_acm_write(cdc_acm, (UCHAR *)response, strlen(response), &write_discard);
         }
         line_length = 0;

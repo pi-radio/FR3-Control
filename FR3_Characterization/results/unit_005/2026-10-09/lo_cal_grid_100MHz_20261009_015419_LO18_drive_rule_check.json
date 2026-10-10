@@ -1,0 +1,14 @@
+{
+  "script": "lo_cal_grid_scan.py",
+  "started": "2026-10-09T01:54:19",
+  "lo_start_ghz": 7.0,
+  "lo_stop_ghz": 22.5,
+  "step_mhz": 100.0,
+  "n_los": 1,
+  "lmx_power": "auto",
+  "blocking_db": 40.0,
+  "zero_bias": false,
+  "null_span_hz": 1000000.0,
+  "also_swap": false,
+  "setup": "Single-LO check (user): LO 18 GHz at the new drive rule (drive 2), null with the reference filter, LO leakage re-read in every usable filter setting. Case closed + MCS, fan off (hot). Source OFF."
+}

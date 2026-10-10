@@ -1,0 +1,35 @@
+\clearpage
+\section{RX-side Compression and Safety --- Low-Side LO (No Spectral Flip)}
+\label{sec:rx-compression-lowside}
+
+\textbf{What's plotted, and why it matters.} At the same 9 representative (FR1, FR3) points used for RX
+conversion gain, the input power was swept upward from −60\,dBm at the ``RX-side FR3 RF In'' connector, using the
+same ``optimal'' filter-selection algorithm described in Section~\ref{sec:sideband-suppression}.\footnote{Every
+point on every curve is a real measurement, never a simulation or an interpolation between sparse samples.} P1dB marks where the gain has dropped 1\,dB below its small-signal value; P3dB
+marks where it has dropped 3\,dB --- exactly as on the TX-side compression sections.
+
+\textbf{Measurement conditions.} \lmxDriveRule{} (set from the LO frequency), with the RX filter in its ``optimal'' setting at each point. Because the LO is shared, the TX side was set up exactly as in normal use (its stored LO-leakage calibration applied and its optimal filter engaged), with both TX-side ports terminated in 50\,\textohm. The unit was measured hot: no fan, LMX2820 die at \condRxCompMinC--\condRxCompMaxC\textdegree C.
+
+\textbf{Why these curves stop early.} As on the TX side, these sweeps are deliberately cut short: each one stops as soon as the measured gain has compressed
+5\,dB below its small-signal value, comfortably past P3dB but with no reason to push the chain any
+harder.\footnote{The RX-side input power is also hard-capped at −5\,dBm at the ``RX-side FR3 RF In'' connector
+regardless --- the HMC963 LNA's absolute maximum input rating is 0\,dBm, and −5\,dBm keeps a deliberate 5\,dB
+safety margin below that. In practice every point here compressed 5\,dB well before reaching that cap.} Driving
+further than necessary to characterize P1dB/P3dB would only raise power at various points in the circuit for no
+measurement benefit.
+
+\textbf{No gain expansion here.} Unlike the TX-side compression curves, these RX curves compress smoothly and
+monotonically, with no bulge above the small-signal line beforehand.\footnote{This is expected: the RX chain's
+final stage is a cascaded pair of ADL5545 IF amplifiers, not the ADL9006 final-stage PA used on the TX side ---
+the gain-expansion behavior described in Section~\ref{sec:compression-upper} is specific to that device class,
+not a general property of this unit.}
+
+\figpair{images/sec9_fig1.pdf}{FR1 = 1.0\,GHz, FR3 = 9.0\,GHz. Filter: \texttt{0x3E}.}{fig:9-1}%
+        {images/sec9_fig2.pdf}{FR1 = 2.0\,GHz, FR3 = 9.0\,GHz. Filter: \texttt{0x3D}.}{fig:9-2}
+\figpair{images/sec9_fig3.pdf}{FR1 = 3.5\,GHz, FR3 = 11.5\,GHz. Filter: \texttt{0x3E}.}{fig:9-3}%
+        {images/sec9_fig4.pdf}{FR1 = 1.0\,GHz, FR3 = 13.0\,GHz. Filter: \texttt{0x1C}.}{fig:9-4}
+\figpair{images/sec9_fig5.pdf}{FR1 = 2.0\,GHz, FR3 = 15.0\,GHz. Filter: \texttt{0x1E}.}{fig:9-5}%
+        {images/sec9_fig6.pdf}{FR1 = 3.5\,GHz, FR3 = 17.5\,GHz. Filter: \texttt{0x26}.}{fig:9-6}
+\figpair{images/sec9_fig7.pdf}{FR1 = 1.0\,GHz, FR3 = 19.0\,GHz. Filter: \texttt{0x2B}.}{fig:9-7}%
+        {images/sec9_fig8.pdf}{FR1 = 2.0\,GHz, FR3 = 22.0\,GHz. Filter: \texttt{0x2E}.}{fig:9-8}
+\figonesmall{images/sec9_fig9.pdf}{FR1 = 3.5\,GHz, FR3 = 25.5\,GHz. Filter: \texttt{0x2E}. Above the unit's rated 24\,GHz maximum FR3 frequency.}{fig:9-9}

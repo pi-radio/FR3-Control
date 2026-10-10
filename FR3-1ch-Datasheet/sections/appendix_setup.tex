@@ -1,0 +1,55 @@
+\clearpage
+\section{Measurement Setup}
+\label{sec:setup}
+\raggedbottom% this appendix's pages end naturally
+
+\textbf{Instruments.} Every measurement in this datasheet except phase noise was made with a Keysight FieldFox N9918B
+handheld analyzer (firmware A.13.25), using its spectrum analyzer and its built-in signal source: the source drives
+the unit's input with a CW tone, or sweeps across a window in step with the analyzer as a tracking generator, and
+the analyzer reads the unit's output. Phase noise (Section~\ref{sec:phase-noise}) was measured on a Keysight N9042B
+UXA signal analyzer with its Phase Noise application. Every setting of the unit is made over the USB serial interface
+(Appendix~\ref{sec:commands}), by scripts that run the instruments and the unit together.
+
+\textbf{What ``dBm at the connector'' means.} The test cables between the instruments and the unit lose a few dB of their
+own, more at higher frequencies. Each cable's loss (its S21, from 0.5 to 4.5\,GHz for the FR1 cable and 2 to
+26.5\,GHz for the FR3 cable) was measured with the FieldFox in network-analyzer mode and is removed from every
+reading, frequency by frequency. Every power in this datasheet is therefore referred to the unit's own
+connector --- ``dBm at the connector'' --- not to the instrument.
+
+\textbf{Readings.} Two methods are used. Single-tone (CW) measurements, such as compression, sideband suppression,
+image rejection and LO leakage, read the tone's power with a peak-search marker on a narrow analyzer span. The unit
+and the analyzer run on independent clocks, so a tone can sit slightly off its nominal frequency; the analyzer
+re-centers on it before each reading. Swept measurements --- conversion gain and gain flatness, which need the gain
+across a whole 500\,MHz window --- use the FieldFox's tracking generator instead: the source and the analyzer sweep
+the window together, and the whole trace is read (for gain flatness, 101 points 5\,MHz apart). The swept method was checked against
+marker readings of individual tones at the same frequencies. Noise and weak-signal readings use power averaging
+(Section~\ref{sec:rx-noise-figure}). Where the input level matters, it was measured directly at the end of the input
+cable rather than taken from the source's nominal setting.
+
+\textbf{Configuration.} Unless a section says otherwise, the unit uses its own 10\,MHz TCXO and LO, and all measurements are on Unit~\#5. \textbf{TX side (Sections~\ref{sec:tx-gain-upper}--\ref{sec:spurious-outputs}):} \lmxDriveRule, the TX LO leakage suppressed with the unit's stored calibration (Section~\ref{sec:lo-suppression}), no fan, LMX2820 die at about \condGainMinC--\condCompMaxC\textdegree C (deliberately hot, the worst case). \textbf{RX side:} the same LMX2820 drive rule, with the TX side set up at every point exactly as in normal use (its stored LO-leakage calibration applied, its optimal filter engaged, and both TX-side ports terminated in 50\,\textohm), no fan (the LMX2820 die temperature of each run is given in its section).
+
+\textbf{Measurement automation.} Claude, an AI model made by Anthropic, assisted with writing the measurement scripts
+that control the instruments and the unit, and with automating the long frequency and power sweeps, working under
+the direction of Pi-Radio engineers. Every number in this datasheet comes from measurements on the real hardware
+described above.
+
+\section{Revision History}
+\label{sec:revisions}
+
+A datasheet revision \textit{a.b.c} applies to PCB revision \textit{a.b}; the last number counts updates to the
+datasheet itself for that PCB revision.
+
+\par\medskip\noindent\begin{minipage}{\linewidth}% caption and table stay on one page
+\begin{center}
+\captionof{table}{Datasheet revisions.}\label{tab:revisions}
+\vspace{0.4em}
+\footnotesize
+\begin{tabularx}{0.84\linewidth}{|l|l|X|}
+\hline
+\textbf{Revision} & \textbf{Date} & \textbf{Changes} \\
+\hline
+1.4.0 & October 2026 & First release of this datasheet, for PCB revision~1.4 with firmware~1.4.1. \\
+\hline
+\end{tabularx}
+\end{center}
+\end{minipage}\par

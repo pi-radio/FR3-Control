@@ -1,0 +1,267 @@
+\documentclass{tufte-handout}
+
+% ---------- Font: IBM Plex Sans throughout (matches the project's matplotlib figures) ----------
+\usepackage{fontspec}
+\setmainfont{IBMPlexSans}[
+  Path = fonts/,
+  Extension = .ttf,
+  UprightFont = *-Regular,
+  BoldFont = *-SemiBold,
+  ItalicFont = *-Italic,
+]
+\setsansfont{IBMPlexSans}[
+  Path = fonts/,
+  Extension = .ttf,
+  UprightFont = *-Regular,
+  BoldFont = *-SemiBold,
+  ItalicFont = *-Italic,
+]
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[bottom]{footmisc}  % footnotes stay at the foot of the page even where \raggedbottom is used (the RX Noise Figure section)
+\usepackage{capt-of}   % \captionof{figure}{...} -- real, numbered captions outside of float placement,
+                       % needed for the dense multi-up figure grids below
+\usepackage{eso-pic}   % draws the logo at an absolute page position, bypassing fancyhdr/geometry's header
+                       % band entirely -- guarantees the exact same size and position on every page,
+                       % including the title page, regardless of margins
+\usepackage{tikz}      % hardware-primer block diagrams and spectrum-flip illustrations (the Hardware Primer section)
+\usetikzlibrary{arrows.meta,positioning,fit,calc}
+
+% ---------- 0.5in margins on all four sides. No sidenotes/marginnotes are used any more (converted to
+% real footnotes below), so there's no need to reserve a margin-note column any more either -- the text
+% (and figures, which size themselves off \linewidth) now use the full page width. ----------
+\geometry{
+  paperwidth=8.5in, paperheight=11in,
+  left=0.5in, right=0.5in, top=0.5in, bottom=0.5in,
+  headheight=0pt, headsep=0pt,
+}
+
+% ---------- More breathing room: between footnotes, and between paragraphs. ----------
+\setlength{\footnotesep}{1.3em}
+\setlength{\parskip}{0.8em}
+\flushbottom
+
+% ---------- tufte-handout redirects \footnote (and even the low-level \@footnotemark/\@footnotetext
+% kernel primitives it calls) to its own margin-note mechanism, so \footnotemark/\footnotetext are
+% ALSO hijacked, not just \footnote. Bypassing all of it with a self-contained implementation built
+% directly on the \footins insertion register, which tufte does not touch. ----------
+\newcounter{realfootnote}
+\makeatletter
+\renewcommand{\footnote}[1]{%
+  \stepcounter{realfootnote}%
+  \textsuperscript{\therealfootnote}%
+  \insert\footins{%
+    \reset@font\footnotesize
+    \interlinepenalty\interfootnotelinepenalty
+    \splittopskip\footnotesep
+    \splitmaxdepth\dp\strutbox \floatingpenalty\@MM
+    \hsize\columnwidth \@parboxrestore
+    \textsuperscript{\therealfootnote}\,#1\par
+  }%
+}
+% An unmarked footnote: lands at the bottom of the page like any other, but with no reference mark in the
+% main text and no number in the note itself (used for the title page's "testing performed on" note).
+\newcommand{\unmarkedfootnote}[1]{%
+  \insert\footins{%
+    \reset@font\footnotesize
+    \interlinepenalty\interfootnotelinepenalty
+    \splittopskip\footnotesep
+    \splitmaxdepth\dp\strutbox \floatingpenalty\@MM
+    \hsize\columnwidth \@parboxrestore
+    #1\par
+  }%
+}
+\makeatother
+
+% ---------- Section numbers ON (tufte-handout disables them by default via secnumdepth=-1). Subsections are
+% still numbered in the body (secnumdepth=2) but left out of the Contents listing (tocdepth=1 = sections only).
+\setcounter{secnumdepth}{2}
+\setcounter{tocdepth}{1}
+
+% ---------- Section headings: bigger and bold (tufte-common.def's default is \Large\itshape) ----------
+\titleformat{\section}%
+  [hang]%
+  {\normalfont\LARGE\bfseries}%
+  {\thesection}%
+  {1em}%
+  {}%
+  []
+
+% ---------- Figures numbered X.Y, X = section number, reset at each new section ----------
+\usepackage{chngcntr}
+\counterwithin{figure}{section}
+\counterwithin{table}{section}   % tables numbered X.Y too, like figures
+
+% ---------- Tufte's running-header/title-page small-caps emulation uses the `soul` package for letter-
+% spacing, which is unreliable under XeLaTeX with a TTF font that has no real small-caps shape (fatal
+% "Package soul Error: Reconstruction failed" on every page). IBM Plex Sans has no small-caps shape here
+% either way, so just fall back to plain text instead of fake small caps. ----------
+\renewcommand{\textsc}[1]{#1}
+\renewcommand{\smallcaps}[1]{#1}
+\renewcommand{\allcaps}[1]{\MakeTextUppercase{#1}}
+
+% ---------- Figure captions: tufte's own caption formatting forces ragged-right justification
+% regardless of ambient \centering. Force centered captions everywhere instead. ----------
+\makeatletter
+\renewcommand{\@tufte@caption@justification}{\centering}
+\makeatother
+
+% ---------- Title page: tufte's default is italic and left-aligned; make it bold and centered instead. ----------
+\makeatletter
+\renewcommand{\maketitle}{%
+  \thispagestyle{fancy}%
+  \begin{center}
+  {\huge\bfseries\sffamily \@title \par}
+  \end{center}
+  \tuftebreak
+  \@afterindentfalse\@afterheading
+}
+\makeatother
+
+% ---------- Page footer: page number centered at the bottom, on every page (the logo, below, is handled
+% completely separately via eso-pic, not through this header/footer mechanism). ----------
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+\fancyfoot[C]{\footnotesize Page \thepage}
+\AtBeginDocument{\fancyhfoffset[RE,RO,LE,LO]{0pt}}
+
+% ---------- Pi-Radio logo, top-right corner, equally inset from both the top and right physical page
+% edges, identical size and position on every single page (including the title page) -- drawn directly at
+% an absolute position via eso-pic, completely bypassing fancyhdr/geometry's header-band math (which,
+% unlike a simple margin, does not place header content a uniform distance from the physical page edge). ----------
+\newlength{\logosize}
+\setlength{\logosize}{0.45in}
+\newlength{\logoinset}
+\setlength{\logoinset}{0.05in}
+\AddToShipoutPictureFG{%
+  \AtPageLowerLeft{%
+    \put(\LenToUnit{\dimexpr \paperwidth-\logoinset-\logosize\relax},%
+         \LenToUnit{\dimexpr \paperheight-\logoinset-\logosize\relax}){%
+      \includegraphics[width=\logosize]{images/pi-radio-logo.png}%
+    }%
+  }%
+}
+
+% ---------- "Contents" heading in bold. ----------
+\renewcommand{\contentsname}{\bfseries Contents}
+
+% ---------- Dense figure grids: two images per row, real numbered captions via \captionof, no float
+% placement algorithm involved. ----------
+\newcommand{\figpair}[6]{%
+  \noindent
+  \begin{minipage}[t]{0.485\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{#1}
+    \captionof{figure}{#2}\label{#3}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.485\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{#4}
+    \captionof{figure}{#5}\label{#6}
+  \end{minipage}
+  \par\vspace{1.5em}
+}
+
+% A single, larger figure (used sparingly, for a figure meant to stand out on its own, e.g. a full-grid
+% heatmap or summary plot).
+\newcommand{\figone}[3]{%
+  \begin{center}
+  \includegraphics[width=0.62\linewidth]{#1}
+  \captionof{figure}{#2}\label{#3}
+  \end{center}
+  \vspace{0.5em}
+}
+
+% A single figure on its own row, at a fixed, consistent width -- used for pairs of "hero" figures (e.g.
+% two full-grid heatmaps) that each get their own row so they can be larger than \figpair panels, while
+% still matching each other's size exactly.
+\newcommand{\figrow}[3]{%
+  \begin{center}
+  \includegraphics[width=0.68\linewidth]{#1}
+  \captionof{figure}{#2}\label{#3}
+  \end{center}
+  \vspace{0.8em}
+}
+
+% A single figure at the SAME size as one \figpair panel (used for an odd-one-out figure that is part of
+% the same series as the others, e.g. figure 9 of 9 near-identical panels, and should not look enlarged).
+\newcommand{\figonesmall}[3]{%
+  \noindent
+  \begin{minipage}[t]{0.485\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{#1}
+    \captionof{figure}{#2}\label{#3}
+  \end{minipage}
+  \par\vspace{1.5em}
+}
+
+% A single figure at the same size as one \figpair panel, with its caption to the RIGHT instead of below (saves a row's
+% height, e.g. so the 9th panel of a series fits on the page with the others).
+\newcommand{\figsidecap}[3]{%
+  \noindent
+  \begin{minipage}[c]{0.485\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{#1}
+  \end{minipage}\hfill
+  \begin{minipage}[c]{0.485\linewidth}
+    \captionof{figure}{#2}\label{#3}
+  \end{minipage}
+  \par\vspace{1.0em}
+}
+
+\title{Pi-Radio FR3-1ch Front-end Kit Datasheet}
+\author{}
+\date{}
+
+% ---------- \keepnext{<height>}: start a new page here unless at least <height> is left on this one, so a short
+% paragraph is never split with a single line at the foot of a page (same logic as the needspace package). ----------
+\makeatletter
+\newcommand{\keepnext}[1]{\par\penalty-100\begingroup\setlength{\dimen@}{#1}%
+  \dimen@ii\pagegoal\advance\dimen@ii-\pagetotal
+  \ifdim\dimen@>\dimen@ii\ifdim\dimen@ii>\z@\vfil\fi\break\fi\endgroup}
+\makeatother
+
+\begin{document}
+\maketitle
+\unmarkedfootnote{Note: Testing performed on Unit \#5.}
+
+\tableofcontents
+
+% Author's Note: boxed, pinned to the bottom-right corner of page 1 (overlay: takes no space from the contents list)
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south east, draw=black!45, fill=black!4, inner sep=6pt, text width=0.42\textwidth, font=\small,
+  align=left] at ([xshift=-\oddsidemargin-1in-\hoffset+\textwidth, yshift=2.6cm]current page.south west)
+  {\textbf{Author's Note.} This document is written as both a tutorial and a datasheet. Every result in it is measured
+   on real hardware, and each one is explained along the way: what is being measured, how, and why it matters.
+   Students new to RF systems can read it to learn the ideas; engineers can go straight to the numbers.};
+\end{tikzpicture}
+\clearpage
+
+\input{sections/section_summary}
+\input{sections/section0_hardware_primer}
+\input{sections/section1_tx_gain_upper}
+\input{sections/section2_tx_gain_lower}
+\input{sections/section_tx_flatness}
+\input{sections/section3_sideband_suppression}
+\input{sections/section4_compression_upper}
+\input{sections/section5_compression_lower}
+\input{sections/section6_lo_suppression}
+\input{sections/section_spurious_outputs}
+\input{sections/section7_rx_gain_lowside}
+\input{sections/section8_rx_gain_highside}
+\input{sections/section_rx_flatness}
+\input{sections/section9_rx_compression_lowside}
+\input{sections/section10_rx_compression_highside}
+\input{sections/section11_rx_image_rejection}
+\input{sections/section12_rx_noise_figure}
+\input{sections/section13_phase_noise}
+\input{sections/section14_tips}
+\input{sections/appendix_gui}
+\input{sections/appendix_commands}
+\input{sections/appendix_setup}
+
+\end{document}

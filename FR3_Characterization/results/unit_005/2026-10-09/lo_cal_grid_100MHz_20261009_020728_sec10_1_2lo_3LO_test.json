@@ -1,0 +1,14 @@
+{
+  "script": "lo_cal_grid_scan.py",
+  "started": "2026-10-09T02:07:28",
+  "lo_start_ghz": 7.0,
+  "lo_stop_ghz": 22.5,
+  "step_mhz": 100.0,
+  "n_los": 3,
+  "lmx_power": "auto",
+  "blocking_db": 40.0,
+  "zero_bias": false,
+  "null_span_hz": 1000000.0,
+  "also_swap": false,
+  "setup": "Section 10.1 method test (user): per LO, fresh null with the reference filter (drive rule), then LO and 2xLO read in every usable filter setting (reference kept in the 2xLO statistics). 3 LOs only. Case closed + MCS, fan off (hot). Source OFF."
+}

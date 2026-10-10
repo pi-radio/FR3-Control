@@ -1,0 +1,15 @@
+{
+  "script": "lo_cal_grid_scan.py",
+  "started": "2026-10-08T15:38:13",
+  "lo_start_ghz": 13.0,
+  "lo_stop_ghz": 16.0,
+  "step_mhz": 100.0,
+  "n_los": 31,
+  "lmx_power": 0,
+  "blocking_db": 40.0,
+  "zero_bias": false,
+  "null_span_hz": 1000000.0,
+  "setup": "LABEL: MCS on Bias Tee. Board out of the case; a tiny MCS piece ONLY on the TX LVA's bias-tee inductors (LVA+Mixer piece removed). FR1 1 GHz, FR3 = LO + 1 GHz, upper sideband. FieldFox source OFF throughout. Reference null at the least-loss state, 1 MHz null span, applied to every usable state. LMX drive 0.",
+  "label": "MCS on Bias Tee",
+  "label_note": "board out of the case; tiny MCS piece only on the TX LVA bias-tee inductors"
+}

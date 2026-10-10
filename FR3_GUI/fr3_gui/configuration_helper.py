@@ -2,12 +2,15 @@
 frequency, and sideband, computes and auto-tunes the LMX2820 frequency that
 produces that FR3 output.
 
-When RF filters are present, also plots the desired/undesired sideband and
-LO leakage positions against a candidate filter's measured S21, and offers
-"Suggest Filter". The suggestion is board-wide, not TX/RX-specific: it's
-published via the filter_suggested signal / suggested_bits attribute for
-TX/RX Settings to apply on their own ("Use Suggested Filter") - this widget
-never drives TX/RX filter hardware itself.
+When RF filters are present, it always suggests a filter for the current
+FR1/FR3/bandwidth/sideband (no on/off switch or button since 1.4.1 - one
+filter switch per path, in TX/RX Settings, was the user's choice) and plots
+the desired/undesired sideband and LO leakage positions against the
+suggested filter's measured S21 ("Suggested Filter: ..."). The suggestion is
+board-wide, not TX/RX-specific: it's published via the filter_suggested
+signal / suggested_bits attribute for TX/RX Settings to apply on their own
+("Use the Configuration Helper's suggested filter") - this widget never
+drives TX/RX filter hardware itself.
 
 FR1, FR3, and sideband are always live inputs, regardless of LO source.
 With the internal LO, they drive the LMX2820 auto-tune as usual. With an
@@ -29,12 +32,10 @@ import pyqtgraph as pg
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QPalette
 from PySide6.QtWidgets import (
-    QCheckBox,
     QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
-    QPushButton,
     QRadioButton,
     QVBoxLayout,
     QWidget,
@@ -77,9 +78,11 @@ LO_BOTTOM_DB = Y_MIN_DB
 # the filter's own S21 difference between the two bands.
 BASELINE_SUPPRESSION_DB = DESIRED_TOP_DB - UNDESIRED_TOP_DB
 
-# Minimum desired/undesired rejection (dB, baseline included) for
-# "Suggest Filter" to consider a configuration qualified.
-MIN_REJECTION_DB = 40.0
+# "Suggest Filter" first finds whichever of the 48 candidates passes the most desired-sideband energy, ignoring the
+# image entirely, then -- among only the candidates within this many dB of that best desired-sideband power -- picks
+# whichever has the least undesired-sideband (image) energy. Without this floor, maximizing rejection alone could
+# (and on real hardware, did) pick a configuration that suppresses the image by crushing the wanted signal too.
+MAX_DESIRED_DEGRADATION_DB = 3.0
 
 
 class _NoWheelZoomGraphicsLayoutWidget(pg.GraphicsLayoutWidget):
@@ -292,27 +295,14 @@ class ConfigurationHelper(QWidget):
             self.fr1_spin.valueChanged.connect(self._on_scoring_input_changed)
             self.fr3_spin.valueChanged.connect(self._on_scoring_input_changed)
             self.bw_spin.valueChanged.connect(self._on_scoring_input_changed)
-            self._redraw()
+            # Show the suggestion for the restored inputs straight away, without publishing it: TX/RX must not
+            # retune the board's filters just because the GUI connected (they follow from the next change on).
+            self._suggest_filter(publish=False)
 
     def _build_filter_ui(self, outer: QVBoxLayout) -> None:
-        suggest_row = QHBoxLayout()
-        self.suggest_button = QPushButton("Suggest Filter")
-        self.suggest_button.setAutoDefault(False)
-        self.suggest_button.setDefault(False)
-        self.suggest_button.clicked.connect(self._suggest_filter)
+        # Always suggesting (1.4.1): the result line under the graph's own "Suggested Filter: ..." title.
         self.suggest_result_label = QLabel()
-        suggest_row.addWidget(self.suggest_button)
-        suggest_row.addWidget(self.suggest_result_label)
-        suggest_row.addStretch(1)
-        outer.addLayout(suggest_row)
-
-        self.auto_select_filter_checkbox = QCheckBox("Automatically Select Filter")
-        # Set before connecting toggled, so this default doesn't itself
-        # trigger a suggestion before the rest of the section even exists.
-        self.auto_select_filter_checkbox.setChecked(True)
-        self.auto_select_filter_checkbox.toggled.connect(self._on_auto_select_filter_toggled)
-        outer.addWidget(self.auto_select_filter_checkbox)
-        self.suggest_button.setEnabled(not self.auto_select_filter_checkbox.isChecked())
+        self.suggest_result_label.setStyleSheet("color: gray;")
 
         self.plot = _NoWheelZoomGraphicsLayoutWidget()
         # Tall enough for the plot itself - this widget's own natural
@@ -352,7 +342,9 @@ class ConfigurationHelper(QWidget):
         # spans well past this graph's intentional 6-30GHz/0 to -50dB window),
         # not just the current sideband/LO region.
         self.plot_item.hideButtons()
+        self.plot_item.setTitle("<b>Suggested Filter</b>", color="black", size="11pt")
         outer.addWidget(self.plot)
+        outer.addWidget(self.suggest_result_label)
 
     # ---- LO frequency computation/application ----
 
@@ -536,31 +528,9 @@ class ConfigurationHelper(QWidget):
 
     # ---- filter suggestion / graph (only when has_rf_filters) ----
 
-    def seed_display_filter(self, bits: int) -> None:
-        """Called once, after the board's snapshot arrives, so the graph
-        starts on the board's real TX filter instead of Bypass. Doesn't
-        emit filter_suggested - TX/RX already got this value from the
-        snapshot directly, and RX must not have it overwritten by TX's
-        value here. No-op once a real suggestion exists."""
-        if self.suggested_bits is None:
-            self.suggested_bits = bits
-            if self._has_rf_filters:
-                self._redraw()
-
-    def _on_auto_select_filter_toggled(self, checked: bool) -> None:
-        self.suggest_button.setEnabled(not checked)
-        if checked:
-            self._suggest_filter()
-
     def _on_scoring_input_changed(self) -> None:
-        """fr1/fr3/bw/sideband changed - re-suggest if that's being kept in
-        sync automatically, otherwise just redraw with the same filter as
-        before (_suggest_filter() already redraws internally, so exactly
-        one of the two happens here, never both)."""
-        if self.auto_select_filter_checkbox.isChecked():
-            self._suggest_filter()
-        else:
-            self._redraw()
+        """fr1/fr3/bw/sideband changed - always re-suggest (it redraws too)."""
+        self._suggest_filter()
 
     def _sideband_centers(self) -> tuple[float, float]:
         """Returns (desired_center_hz, undesired_center_hz)."""
@@ -571,9 +541,9 @@ class ConfigurationHelper(QWidget):
         return f_lo_hz - f_in_hz, f_lo_hz + f_in_hz
 
     def _score_for_bits(self, bits: int) -> tuple[float, float]:
-        """Returns (desired_power_passed, rejection_db) for one filter
-        configuration, given the currently configured FR1/FR3/bw/sideband
-        state. rejection_db already includes BASELINE_SUPPRESSION_DB."""
+        """Returns (desired_power, undesired_power): raw mean linear power passed in each sideband's window for one
+        filter configuration, given the currently configured FR1/FR3/bw/sideband state. Filter response only - the
+        mixer's own BASELINE_SUPPRESSION_DB is not part of either of these two raw numbers; see _rejection_db()."""
         desired_center, undesired_center = self._sideband_centers()
         half_bw_hz = (self.bw_spin.value() * 1e9) / 2.0
         desired_range = (desired_center - half_bw_hz, desired_center + half_bw_hz)
@@ -582,8 +552,14 @@ class ConfigurationHelper(QWidget):
         response = get_response(bits)
         desired_power = _band_mean_power(response, *desired_range)
         undesired_power = _band_mean_power(response, *undesired_range)
+        return desired_power, undesired_power
+
+    @staticmethod
+    def _rejection_db(desired_power: float, undesired_power: float) -> float:
+        """Desired/undesired power ratio, with the mixer's own BASELINE_SUPPRESSION_DB added - for display only, not
+        used to choose between candidates (see _suggest_filter())."""
         filter_only_rejection_db = 10.0 * np.log10(desired_power / max(undesired_power, 1e-30))
-        return desired_power, filter_only_rejection_db + BASELINE_SUPPRESSION_DB
+        return filter_only_rejection_db + BASELINE_SUPPRESSION_DB
 
     def _add_legend_item(self, item: pg.PlotDataItem, name: str) -> None:
         """AlignVCenter on the label is a safety net in case a platform's
@@ -668,11 +644,15 @@ class ConfigurationHelper(QWidget):
         margin = (high - low) * 0.15 or 1e9
         self.plot_item.setXRange(low - margin, high + margin, padding=0)
 
-    def _suggest_filter(self) -> None:
-        """Searches all 48 non-Bypass configs (3 bands x 16 sub-states).
-        Picks the one with the most desired sideband energy among those
-        reaching MIN_REJECTION_DB, or the highest-rejection one if none
-        qualify. LO leakage is not part of this scoring."""
+    def _suggest_filter(self, publish: bool = True) -> None:
+        """Searches all 48 non-Bypass configs (3 bands x 16 sub-states), in two steps. First finds whichever
+        configuration passes the most desired-sideband energy, full stop, ignoring the image entirely - call its
+        desired power P_best. Then, restricted to only the configurations whose desired power is within
+        MAX_DESIRED_DEGRADATION_DB of P_best, picks whichever of those has the least undesired-sideband (image)
+        energy. This order matters: picking purely to maximize rejection (as an earlier version of this method did)
+        can choose a configuration that suppresses the image by crushing the wanted signal too - confirmed on real
+        hardware as a near-total conversion-gain collapse at specific frequencies. LO leakage is not part of this
+        scoring."""
         if not self._is_configuration_valid():
             # Freeze on the last suggestion made for a valid configuration
             # rather than scoring filters against a frequency the LMX2820
@@ -684,30 +664,27 @@ class ConfigurationHelper(QWidget):
                 continue
             for config_nibble in range(16):
                 bits = (bank_nibble << 4) | config_nibble
-                desired_power, rejection_db = self._score_for_bits(bits)
-                candidates.append((bits, desired_power, rejection_db))
+                desired_power, undesired_power = self._score_for_bits(bits)
+                candidates.append((bits, desired_power, undesired_power))
 
-        qualifying = [c for c in candidates if c[2] >= MIN_REJECTION_DB]
-        met_threshold = bool(qualifying)
-        best_bits, _, best_rejection_db = max(
-            qualifying if met_threshold else candidates,
-            key=(lambda c: c[1]) if met_threshold else (lambda c: c[2]),
-        )
+        best_desired_power = max(c[1] for c in candidates)
+        desired_floor = best_desired_power / (10.0 ** (MAX_DESIRED_DEGRADATION_DB / 10.0))
+        eligible = [c for c in candidates if c[1] >= desired_floor]
+        best_bits, best_desired_power_chosen, best_undesired_power = min(eligible, key=lambda c: c[2])
+        best_rejection_db = self._rejection_db(best_desired_power_chosen, best_undesired_power)
         bank_name = next(name for name, nibble in FILTER_BANKS if nibble == (best_bits >> 4) & 0x0F)
 
         # A recommendation only - this widget doesn't drive TX or RX filter
-        # hardware itself; TX/RX Settings' own "Use Suggested Filter"
-        # buttons apply it if the user chooses to.
+        # hardware itself; TX/RX Settings' "Use the Configuration Helper's
+        # suggested filter" checkboxes apply it if the user chooses to.
         self.suggested_bits = best_bits
-        self.filter_suggested.emit(best_bits)
+        if publish:
+            self.filter_suggested.emit(best_bits)
         self._redraw()
 
-        if met_threshold:
-            self.suggest_result_label.setText(
-                f"Suggested: {bank_name}, 0x{best_bits & 0x0F:X} ({_format_rejection(best_rejection_db)})"
-            )
-        else:
-            self.suggest_result_label.setText(
-                f"No configuration reaches {MIN_REJECTION_DB:.0f}dB rejection - best "
-                f"available: {bank_name}, 0x{best_bits & 0x0F:X} ({_format_rejection(best_rejection_db)})"
-            )
+        # Short title (the plot is narrow); the detail goes on the line under the graph.
+        self.plot_item.setTitle(f"<b>Suggested Filter: 0x{best_bits:02X}</b>", color="black", size="11pt")
+        self.suggest_result_label.setText(
+            f"0x{best_bits:02X} = {bank_name}, configuration 0x{best_bits & 0x0F:X}: {_format_rejection(best_rejection_db)}; "
+            f"desired signal within {MAX_DESIRED_DEGRADATION_DB:.0f}dB of the best available"
+        )

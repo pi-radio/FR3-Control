@@ -1,0 +1,14 @@
+{
+  "script": "lo_cal_grid_scan.py",
+  "started": "2026-10-08T18:51:32",
+  "lo_start_ghz": 7.0,
+  "lo_stop_ghz": 22.5,
+  "step_mhz": 100.0,
+  "n_los": 156,
+  "lmx_power": 0,
+  "blocking_db": 40.0,
+  "zero_bias": false,
+  "null_span_hz": 1000000.0,
+  "also_swap": false,
+  "setup": "FULL calibration scan, HOT: started automatically when the LMX die reached 75.4 C (fan off). Same unit configuration as the cold scan (lo_cal_grid_100MHz_20261008_173034_full_cal_cold_closed_MCS). One null per LO at the reference (least-loss) state, 1 MHz null span, that bias applied to every usable state. IQ THRU. TX-side FR1 IF In terminated 50 ohm. FieldFox source OFF. LMX drive 0."
+}

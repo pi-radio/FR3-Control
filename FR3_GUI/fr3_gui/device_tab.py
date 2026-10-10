@@ -28,6 +28,7 @@ from .configuration_helper import ConfigurationHelper
 from .discovery import DeviceInfo
 from .lmx_register_dialog import LmxRegisterDialog
 from .lo_suppression import suggest_iv_qv
+from .am3153_filter import FILTER_BANKS
 from .widgets import BankConfigFilterControl, VoltageControl
 from .worker import DeviceWorker
 
@@ -97,6 +98,7 @@ class DeviceTab(QWidget):
         self.worker.values_read.connect(self._apply_snapshot)
         self.worker.lock_status_changed.connect(self._update_lock_status)
         self.worker.lmx_temperature_changed.connect(self._update_lmx_temperature)
+        self.worker.lo_status_changed.connect(self._update_lo_status)
         self.worker.command_error.connect(self._show_error)
         self.worker.connection_lost.connect(self._on_connection_lost)
         self.worker.start()
@@ -286,7 +288,8 @@ class DeviceTab(QWidget):
             self._set_freq_display, self.lo_int_radio, self.external_lo_value_label,
             self.worker, self.tab_key, self._caps.has_rf_filters,
             is_populating=lambda: self._populating,
-            on_lo_tuned=self._maybe_auto_suggest_iv_qv if self._caps.has_ltc2668 else None,
+            on_lo_tuned=(self._maybe_auto_suggest_iv_qv
+                         if self._caps.has_ltc2668 and not self._caps.has_lo_control else None),
         )
         layout.addWidget(self.configuration_helper)
         return section
@@ -336,7 +339,17 @@ class DeviceTab(QWidget):
         self.power_spin.valueChanged.connect(self._power_changed)
         form.addRow("<b>LO Power/Drive (0-7)</b>", self.power_spin)
 
-        power_hint = QLabel("Recommended value: 7")
+        if self._caps.has_lo_control:
+            # Firmware 1.4.1 drive rule: AUTO sets the drive from the LO frequency on every tune.
+            self.power_auto_checkbox = QCheckBox("Automatic (recommended): set from the LO frequency")
+            self.power_auto_checkbox.setChecked(True)
+            self.power_auto_checkbox.toggled.connect(self._power_auto_toggled)
+            self.power_spin.setEnabled(False)
+            form.addRow("", self.power_auto_checkbox)
+            power_hint = QLabel("Automatic: 0 for LO \u2264 13 GHz, 2 for 13\u201320 GHz, 4 for LO \u2265 20 GHz")
+        else:
+            self.power_auto_checkbox = None
+            power_hint = QLabel("Recommended value: 7")
         power_hint.setStyleSheet("color: gray;")
         form.addRow("", power_hint)
 
@@ -406,7 +419,29 @@ class DeviceTab(QWidget):
     def _power_changed(self, value: int) -> None:
         if self._populating:
             return
-        self.worker.submit("set_lmx_power", value)
+        self.worker.submit("set_lmx_power", value)  # firmware 1.4.1: a manual drive switches AUTO off
+
+    def _power_auto_toggled(self, checked: bool) -> None:
+        self.power_spin.setEnabled(not checked)
+        if self._populating:
+            return
+        if checked:
+            self.worker.submit("set_lmx_power_auto")
+        else:
+            self.worker.submit("set_lmx_power", self.power_spin.value())
+
+    def _update_lo_status(self, status: dict) -> None:
+        """Firmware 1.4.1 poll (every 2 s): drive mode/level and the auto-bias state."""
+        self._populating = True
+        try:
+            if self.power_auto_checkbox is not None:
+                self.power_auto_checkbox.setChecked(status["lmx_power_auto"])
+                self.power_spin.setEnabled(not status["lmx_power_auto"])
+            self.power_spin.setValue(status["lmx_power"])
+            if self._caps.has_ltc2668:
+                self._show_iq_bias(status["iq_bias"])
+        finally:
+            self._populating = False
 
     def _power_state_changed(self, checked: bool) -> None:
         # Only "Powered On" is connected; checked reflects which is selected.
@@ -433,6 +468,10 @@ class DeviceTab(QWidget):
         self.q_v_control = VoltageControl(lambda v: self.worker.submit("set_q_v", v))
         form.addRow("I_V", self.i_v_control)
         form.addRow("Q_V", self.q_v_control)
+
+        if self._caps.has_lo_control:
+            self._build_lo_cal_rows(form)
+            return group
 
         suggest_row = QHBoxLayout()
         self.suggest_iv_qv_button = QPushButton("Suggest I_V and Q_V")
@@ -474,10 +513,97 @@ class DeviceTab(QWidget):
 
         return group
 
+    def _build_lo_cal_rows(self, form: QFormLayout) -> None:
+        """Firmware 1.4.1: the unit's own cold/hot LO-null calibration, applied by the firmware (on every
+        tune, re-applied every 2 s as the LMX temperature changes). The GUI only switches it on/off and
+        shows what is stored and applied. Moving I_V/Q_V by hand switches it off (in the firmware too)."""
+        self.iq_auto_checkbox = QCheckBox("Automatic LO suppression from this unit's calibration (recommended)")
+        self.iq_auto_checkbox.setChecked(True)
+        self.iq_auto_checkbox.toggled.connect(self._iq_auto_toggled)
+        form.addRow("", self.iq_auto_checkbox)
+
+        # No "re-apply" button: in AUTO the firmware re-applies on every tune and every 2 s, and switching
+        # back from manual is the checkbox (IQBIAS AUTO) - a button would only duplicate it.
+        self.iq_status_label = QLabel("")
+        form.addRow("", self.iq_status_label)
+
+        self.cal_info_label = QLabel("Calibration: reading\u2026")
+        self.cal_info_label.setStyleSheet("color: gray;")
+        self.cal_info_label.setWordWrap(True)
+        form.addRow("", self.cal_info_label)
+
+        self.i_v_control.setEnabled(False)
+        self.q_v_control.setEnabled(False)
+
+    def _iq_auto_toggled(self, checked: bool) -> None:
+        self.i_v_control.setEnabled(not checked)
+        self.q_v_control.setEnabled(not checked)
+        if self._populating:
+            return
+        self.worker.submit("set_iq_bias_auto", checked)
+
+    def _show_iq_bias(self, bias: dict) -> None:
+        """Called while _populating: reflects the firmware's mode and the I/Q it applied."""
+        if not hasattr(self, "iq_auto_checkbox"):
+            return
+        self.iq_auto_checkbox.setChecked(bias["auto"])
+        self.i_v_control.setEnabled(not bias["auto"])
+        self.q_v_control.setEnabled(not bias["auto"])
+        if bias["auto"]:
+            # Only in auto mode: in manual mode the controls are the user's, and a poll must not move a
+            # slider mid-drag (the snapshot sets them once from GET I_V / GET Q_V).
+            self.i_v_control.set_value(bias["i_v"])
+            self.q_v_control.set_value(bias["q_v"])
+        if not bias["auto"]:
+            text = "Manual I_V/Q_V (automatic LO suppression off)"
+        elif bias["state"] == "ON":
+            t = bias["temp_c"]
+            text = f"Applied automatically for {t:.1f} \u00b0C" if t is not None else "Applied automatically"
+        elif bias["state"] == "NOCAL":
+            text = "No calibration stored on this unit"
+        elif bias["state"] == "EXTLO":
+            text = "Automatic bias inactive (external LO)"
+        elif bias["state"] == "MUTED":
+            text = "Automatic bias inactive (LO powered off)"
+        else:
+            text = bias["state"]
+        self.iq_status_label.setText(text)
+        # The external-LO pause is easy to miss and leaves the bias stale: red and bold (user, 2026-10-10).
+        self.iq_status_label.setStyleSheet(
+            "color: #a01414; font-weight: bold;" if bias["auto"] and bias["state"] == "EXTLO" else "")
+
+    def _show_cal_info(self, info: dict | None, temps: dict | None) -> None:
+        if not hasattr(self, "cal_info_label"):
+            return
+        if info is None or info["n"] == 0:
+            self.cal_info_label.setText(
+                "This unit has no LO-suppression calibration stored. Automatic LO suppression is "
+                "unavailable; set I_V and Q_V by hand."
+            )
+            self.cal_info_label.setStyleSheet("color: #a01414;")
+            return
+        if not info["crc_ok"]:
+            self.cal_info_label.setText("The stored LO-suppression calibration failed its integrity check "
+                                        "(CRC); it is not used. Re-calibrate this unit.")
+            self.cal_info_label.setStyleSheet("color: #a01414;")
+            return
+        d = str(info["date"])
+        date = f"{d[:4]}-{d[4:6]}-{d[6:]}" if len(d) == 8 else d
+        text = f"Calibration: unit #{info['serial']}, {date}, {info['n']} entries"
+        if temps is not None:
+            (c0, c1), (h0, h1) = temps["cold"], temps["hot"]
+            text += f"; cold {c0:.0f}\u2013{c1:.0f} \u00b0C, hot {h0:.0f}\u2013{h1:.0f} \u00b0C"
+        if info["serial"] != self._info.serial_number:
+            text += f" (WARNING: made for unit #{info['serial']}, this is unit #{self._info.serial_number})"
+        self.cal_info_label.setText(text)
+        self.cal_info_label.setStyleSheet("color: gray;")
+
     def _update_suggest_iv_qv_availability(self) -> None:
         """Suggest/auto I_V-Q_V are only meaningful with the internal
         LMX2820 in use; the manual button is further disabled whenever
         "Automatically set" is handling it instead."""
+        if not hasattr(self, "auto_iv_qv_checkbox"):
+            return  # firmware 1.4.1 boards: the firmware pauses the auto bias itself on an external LO
         lo_internal = self.lo_int_radio.isChecked()
         self.auto_iv_qv_checkbox.setEnabled(lo_internal)
         self.suggest_iv_qv_button.setEnabled(lo_internal and not self.auto_iv_qv_checkbox.isChecked())
@@ -597,29 +723,53 @@ class DeviceTab(QWidget):
         return group
 
     def _build_use_suggested_filter_column(self, filter_control: BankConfigFilterControl) -> QWidget:
-        """Shared by the TX/RX filter groups: while checked, keeps
-        filter_control synced to Configuration Helper's suggestion and
-        greyed out; unchecking hands it back to manual control."""
-        checkbox = QCheckBox("Automatically apply the Suggested Filter from the Configuration Helper")
+        """Shared by the TX/RX filter groups - the one filter switch per path (the Configuration Helper always
+        suggests; 1.4.1). While checked, keeps filter_control synced to the Configuration Helper's suggestion and
+        greyed out; unchecking hands it back to manual control. A note under it shows the filter in use and,
+        when different, the one suggested."""
+        checkbox = QCheckBox("Use the Configuration Helper's suggested filter")
         checkbox.setChecked(True)
         filter_control.setEnabled(False)
+        in_use_label = QLabel("")
+
+        def describe(bits: int) -> str:
+            bank_name = next(name for name, nibble in FILTER_BANKS if nibble == (bits >> 4) & 0x0F)
+            return f"0x{bits:02X} ({bank_name})" if (bits >> 4) == 0 else \
+                f"0x{bits:02X} ({bank_name}, configuration 0x{bits & 0x0F:X})"
+
+        def update_note(*_args) -> None:
+            in_use = filter_control.value()
+            suggested = self.configuration_helper.suggested_bits
+            if suggested is None or suggested == in_use:
+                in_use_label.setText(f"In use: {describe(in_use)}" + ("" if suggested is None else ", the suggested filter"))
+                in_use_label.setStyleSheet("color: gray;")
+            else:
+                in_use_label.setText(f"In use: {describe(in_use)}. Suggested: {describe(suggested)}")
+                in_use_label.setStyleSheet("color: #8C5A00;")
 
         def on_toggled(checked: bool) -> None:
             filter_control.setEnabled(not checked)
             if checked and self.configuration_helper.suggested_bits is not None:
                 filter_control.apply(self.configuration_helper.suggested_bits)
+            update_note()
 
         checkbox.toggled.connect(on_toggled)
 
         def on_suggested(bits: int) -> None:
             if checkbox.isChecked():
                 filter_control.apply(bits)
+            update_note()
 
         self.configuration_helper.filter_suggested.connect(on_suggested)
+        filter_control.value_changed.connect(update_note)
+        if not hasattr(self, "_filter_in_use_updaters"):
+            self._filter_in_use_updaters = []
+        self._filter_in_use_updaters.append(update_note)
 
         column = QVBoxLayout()
         column.setSpacing(2)
         column.addWidget(checkbox)
+        column.addWidget(in_use_label)
         column_widget = QWidget()
         column_widget.setLayout(column)
         return column_widget
@@ -641,6 +791,13 @@ class DeviceTab(QWidget):
                 self._update_lock_status(values["lmx_lock"])
             if "lmx_temperature_c" in values:
                 self._update_lmx_temperature(values["lmx_temperature_c"])
+            if "lmx_power_auto" in values and self.power_auto_checkbox is not None:
+                self.power_auto_checkbox.setChecked(values["lmx_power_auto"])
+                self.power_spin.setEnabled(not values["lmx_power_auto"])
+            if "iq_bias" in values:
+                self._show_iq_bias(values["iq_bias"])
+            if "cal_info" in values:
+                self._show_cal_info(values["cal_info"], values.get("cal_temps"))
             if "i_v" in values:
                 self.i_v_control.set_value(values["i_v"])
             if "q_v" in values:
@@ -661,8 +818,9 @@ class DeviceTab(QWidget):
                 self.configuration_helper.check_recipe_matches_device(values["lmx_freq_hz"])
             if "tx_filter" in values:
                 self.tx_filter_control.set_value(values["tx_filter"])
-                self.configuration_helper.seed_display_filter(values["tx_filter"])
             if "rx_filter" in values:
                 self.rx_filter_control.set_value(values["rx_filter"])
+            for note in getattr(self, "_filter_in_use_updaters", []):
+                note()
         finally:
             self._populating = False

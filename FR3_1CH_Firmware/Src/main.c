@@ -21,6 +21,7 @@
 #include "main.h"
 #include "gpdma.h"
 #include "icache.h"
+#include "lo_control.h"
 #include "spi.h"
 #include "ucpd.h"
 #include "usb.h"
@@ -192,6 +193,7 @@ int main(void)
 #endif
   LMX2820_Init();
   LTC2668_Init();
+  LoControl_Init();   /* 1.4.1: loads the LO-null calibration table before Settings_Init() applies it */
   Settings_Init();
   /* USER CODE END 2 */
 

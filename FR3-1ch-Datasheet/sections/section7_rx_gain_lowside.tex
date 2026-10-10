@@ -1,0 +1,54 @@
+\clearpage
+\section{RX-side Conversion Gain --- Low-Side LO (No Spectral Flip)}
+\label{sec:rx-gain-lowside}
+
+\textbf{What is conversion gain?} The RX side is the TX side in reverse: it takes a signal in at a high FR3
+frequency and brings it down to FR1, amplifying it along the way. Conversion gain measures that amplification
+across the change of frequency. Feed a signal into the ``RX-side FR3 RF In'' connector at, say, −50\,dBm, and
+measure the signal that comes out of the ``RX-side FR1 IF Out'' connector at its new frequency, say −5\,dBm. The conversion
+gain is simply the difference: −5 − (−50) = 45\,dB. Because both powers are in dBm, subtracting them gives the
+conversion gain in dB directly.
+
+\textbf{What's plotted.} Each of the first seven figures holds FR1 (the IF output frequency) fixed at one
+center value (1.0 up to the unit's 4.0\,GHz maximum, in 0.5\,GHz steps) and plots conversion gain against the
+swept FR3 input frequency for that output, using the same methodology as the TX conversion-gain sections: every
+point is the average conversion gain across a real 500\,MHz swept window centered on that point, not a single
+CW tone.\footnote{The FieldFox's built-in tracking generator drives FR3 into the ``RX-side FR3 RF In'' port at a
+calibrated
+−50\,dBm while its own receiver sweeps the corresponding FR1 window at the ``RX-side FR1 IF Out'' port
+in lock-step.} Grey is the raw LNA-and-mixer chain with the AM3153 filter bypassed; blue is the filter engaged,
+re-selected at every point using the same ``optimal'' algorithm described in
+Section~\ref{sec:sideband-suppression}, reused here because the AM3153 is RX's actual image-rejection mechanism
+--- there is no I/Q image rejection on this side of the board, since the mixer's Q output is simply discarded.
+
+\textbf{Measurement conditions.} \lmxDriveRule{} (set from the LO frequency). Because the LO is shared, the TX side was set up at every point exactly as in normal use (its stored LO-leakage calibration applied and its optimal filter engaged), with both TX-side ports terminated in 50\,\textohm. The unit was measured hot, as on the TX side: no fan, LMX2820 die at \condRxGainMinC--\condRxGainMaxC\textdegree C.
+
+\textbf{How the filter is chosen.} The same two-step rule used throughout this datasheet: first find whichever
+of the 48 candidate configurations (3 bands × 16 sub-states) passes the most desired energy on its own;
+then, restricted to candidates within 3\,dB of that best desired power, choose whichever rejects the image the
+most. Consecutive points that land on the same filter form a \emph{region}; the dashed vertical lines on each
+panel mark every boundary between regions, and the blue hex code running up from the x-axis inside each region
+is the actual \texttt{filter\_bits} value used for every point in it.
+
+\textbf{Low-side LO: LO = FR3 − FR1.} This is the LO tuning regime shown in this section. Because of it, the
+IF output spectrum is \emph{not} flipped relative to the RF input --- as FR3 increases, the IF output's own
+internal content increases too.\footnote{Since TX and RX share one physical LO, this also means the two
+chains' LO-side states are always consistent with each other: whenever RX is running low-side LO, TX (if active at the
+same time) is necessarily running upper-sideband up-conversion, and vice versa.} In Figure~\ref{fig:7-7} (FR1 = 4.0\,GHz), as on the TX side, the window extends 250\,MHz past the unit's IF design spec. Figures~\ref{fig:7-8} and~\ref{fig:7-9} repeat the bypassed and optimal data across the full (FR1, FR3) grid.
+
+\figpair{images/sec7_fig1.pdf}{FR1 (output) = 1.0\,GHz.}{fig:7-1}%
+        {images/sec7_fig2.pdf}{FR1 (output) = 1.5\,GHz.}{fig:7-2}
+
+\figpair{images/sec7_fig3.pdf}{FR1 (output) = 2.0\,GHz.}{fig:7-3}%
+        {images/sec7_fig4.pdf}{FR1 (output) = 2.5\,GHz.}{fig:7-4}
+\figpair{images/sec7_fig5.pdf}{FR1 (output) = 3.0\,GHz.}{fig:7-5}%
+        {images/sec7_fig6.pdf}{FR1 (output) = 3.5\,GHz.}{fig:7-6}
+\figonesmall{images/sec7_fig7.pdf}{FR1 (output) = 4.0\,GHz. 250\,MHz of this window falls outside the unit's IF design spec (shown in red).}{fig:7-7}
+
+\newpage
+\figrow{images/sec7_fig8.pdf}{Conversion gain, low-side LO: full measured (FR1, FR3) grid, filter bypassed.
+Zoom in to read each cell's exact values, printed as (FR1, FR3, conversion gain), with FR1 and FR3 in GHz and
+the conversion gain in dB.}{fig:7-8}
+\figrow{images/sec7_fig9.pdf}{Conversion gain, low-side LO: full measured (FR1, FR3) grid, optimal filter.
+Zoom in to read each cell's exact values, printed as (FR1, FR3, conversion gain), with FR1 and FR3 in GHz and
+the conversion gain in dB.}{fig:7-9}

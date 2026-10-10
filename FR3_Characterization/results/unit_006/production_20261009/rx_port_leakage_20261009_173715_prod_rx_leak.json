@@ -1,0 +1,16 @@
+{
+  "script": "rx_port_leakage.py",
+  "started": "2026-10-09T17:37:15",
+  "unit_serial": 6,
+  "lmx_power": "auto",
+  "bias_from": "stored cal tables:  / results\\unit_006\\production_20261009\\lo_cal_grid_100MHz_20261009_170351_prod_lo8_table.csv + results\\unit_006\\production_20261009\\lo_cal_grid_100MHz_20261009_170417_prod_lo16_20_table.csv",
+  "lo_ghz": [
+    8.0,
+    16.0,
+    20.0
+  ],
+  "rx_filter": "optimal for FR3 = LO + 1 GHz",
+  "iq": "THRU",
+  "readings": "LO and 2LO at RX-side FR3 RF In, FR3 cable corrected; 1 MHz span, RBW 10 kHz, 0 dB att, ref -20 dBm, 4 power averages, marker peak; floor = trace median",
+  "setup": "Unit 6 production test, set-up C"
+}

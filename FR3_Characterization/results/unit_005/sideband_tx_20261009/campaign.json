@@ -1,0 +1,17 @@
+{
+  "script": "sideband_campaign.py",
+  "lmx_power": "auto",
+  "input_dbm_at_connector": -40.0,
+  "bias": "cal tables interpolated:  / results\\unit_005\\2026-10-09\\lo_cal_grid_100MHz_20261009_022928_full_cal_hot_drive_rule_table.csv",
+  "reading": "1 MHz span, RBW 10 kHz, 30 dB att, no averaging, peak search; cables removed",
+  "runs": [
+    {
+      "started": "2026-10-09T03:47:18-04:00",
+      "ff_idn": "Keysight Technologies,N9918B,MY63185042,A.13.25"
+    },
+    {
+      "started": "2026-10-09T13:27:40-04:00",
+      "ff_idn": "Keysight Technologies,N9918B,MY63185042,A.13.25"
+    }
+  ]
+}

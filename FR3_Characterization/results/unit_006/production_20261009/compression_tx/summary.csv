@@ -1,0 +1,4 @@
+sideband,fr1_ghz,fr3_ghz,lo_ghz,filter_bits,lmx_power,i_v,q_v,small_signal_gain_db,p1db_in_dbm,p1db_out_dbm,p3db_in_dbm,p3db_out_dbm,stop_reason,lmx_temp_c,time
+upper,1,9,8,0x3E,0,0.01995,0.06130,44.29,-25.04,18.25,-22.57,18.72,reached 5.0 dB compression,62.7,2026-10-09T17:16:10-04:00
+upper,2,22,20,0x2E,4,-0.01324,-0.00225,26.77,-10.23,15.54,-7.86,15.9,reached 5.0 dB compression,66.1,2026-10-09T17:17:15-04:00
+lower,2,14,16,0x14,2,-0.04170,0.03834,25.70,-8.92,15.78,-6.57,16.13,reached 5.0 dB compression,66.9,2026-10-09T17:19:18-04:00

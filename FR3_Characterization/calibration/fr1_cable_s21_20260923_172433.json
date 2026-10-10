@@ -1,0 +1,16 @@
+{
+  "instrument": "Keysight Technologies,N9918B,MY63185042,A.13.25",
+  "cable": "fr1_cable",
+  "captured": "2026-09-23T17:24:07-04:00",
+  "measurement": "S21",
+  "start_hz": 500000000.0,
+  "stop_hz": 4500000000.0,
+  "points": 2001,
+  "if_bandwidth_hz": 1000.0,
+  "source_power_dbm": -15.0,
+  "averaging_count": 1,
+  "correction_state": "1",
+  "user_calibration_active": false,
+  "repeatability_max_db": 0.012598522800941536,
+  "sweeps_averaged_for_repeatability_check": 3
+}

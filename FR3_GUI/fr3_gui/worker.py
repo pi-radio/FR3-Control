@@ -17,6 +17,8 @@ from .device import LMX_REGISTER_COUNT, Device, DeviceError
 logger = logging.getLogger(__name__)
 
 LOCK_POLL_INTERVAL_S = 0.75
+# 1.4.1 (has_lo_control): drive and auto-bias status, polled at the firmware's own re-apply period
+LO_STATUS_POLL_INTERVAL_S = 2.0
 _STOP = object()
 _SNAPSHOT = object()
 _READ_ALL_LMX_REGS = object()
@@ -26,6 +28,8 @@ class DeviceWorker(QThread):
     values_read = Signal(dict)  # one-shot snapshot of every persisted value
     lock_status_changed = Signal(str)  # 'LOCKED' / 'UNLOCKED'
     lmx_temperature_changed = Signal(float)  # degrees C, polled alongside lock status
+    # 1.4.1 (has_lo_control): {'lmx_power': int, 'lmx_power_auto': bool, 'iq_bias': dict} every 2 s
+    lo_status_changed = Signal(object)
     command_result = Signal(str, bool)  # (method_name, success) for SET-style calls
     command_error = Signal(str)  # human-readable I/O/timeout error
     connection_lost = Signal()
@@ -62,6 +66,7 @@ class DeviceWorker(QThread):
     def run(self) -> None:
         logger.info("Worker started for %s", self._device.port_name)
         next_lock_poll = 0.0
+        next_lo_poll = 0.0
         while self._running:
             wait_s = max(0.05, next_lock_poll - time.monotonic()) if self._caps.has_lmx2820 else None
             try:
@@ -115,6 +120,20 @@ class DeviceWorker(QThread):
                 self.lmx_temperature_changed.emit(temperature_c)
                 next_lock_poll = now + LOCK_POLL_INTERVAL_S
 
+            if self._caps.has_lo_control and now >= next_lo_poll:
+                try:
+                    self.lo_status_changed.emit({
+                        "lmx_power": self._device.get_lmx_power(),
+                        "lmx_power_auto": self._device.get_lmx_power_auto(),
+                        "iq_bias": self._device.get_iq_bias(),
+                    })
+                except DeviceError as exc:
+                    logger.warning("%s: LO status poll failed: %s", self._device.port_name, exc)
+                    self.command_error.emit(str(exc))
+                    self.connection_lost.emit()
+                    break
+                next_lo_poll = now + LO_STATUS_POLL_INTERVAL_S
+
         logger.info("Worker stopping for %s", self._device.port_name)
         self._device.close()
 
@@ -140,6 +159,11 @@ class DeviceWorker(QThread):
         if caps.has_rf_filters:
             values["tx_filter"] = self._device.get_tx_filter()
             values["rx_filter"] = self._device.get_rx_filter()
+        if caps.has_lo_control:
+            values["lmx_power_auto"] = self._device.get_lmx_power_auto()
+            values["iq_bias"] = self._device.get_iq_bias()
+            values["cal_info"] = self._device.get_cal_info()
+            values["cal_temps"] = self._device.get_cal_temps()
 
         self.values_read.emit(values)
 

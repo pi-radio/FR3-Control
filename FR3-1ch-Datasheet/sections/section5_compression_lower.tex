@@ -1,0 +1,26 @@
+\clearpage
+\section{TX-side Compression and Safety --- Lower Sideband}
+\label{sec:compression-lower}
+
+\textbf{What's plotted, and why it matters.} Identical methodology to
+Section~\ref{sec:compression-upper}, with the unit tuned to the lower sideband: at 9 representative (FR1, FR3)
+points, the input power was swept upward from −60\,dBm to 5\,dB of compression, with the same ``optimal'' filter-selection
+algorithm and the same measurement conditions (LMX drive rule, stored LO-null calibration, unit hot at
+\condCompMinC--\condCompMaxC\textdegree C).\footnote{Every point on every curve is a real measurement.} As
+before, P1dB marks where the gain has dropped 1\,dB below its small-signal value, and P3dB marks where it has
+dropped 3\,dB.
+
+\textbf{Gain expansion before compression.} The same non-monotonic gain-vs-drive behavior seen in
+Section~\ref{sec:compression-upper} appears here too --- expected for the ADL9006 final-stage PA, not a
+measurement error.\footnote{See the footnote in Section~\ref{sec:compression-upper} for the full
+explanation and the reference to the ADL9006's own published datasheet curves.}
+
+\figpair{images/sec5_fig1.pdf}{FR1 = 1.0\,GHz, FR3 = 8.0\,GHz. Filter: 0x33.}{fig:5-1}%
+        {images/sec5_fig2.pdf}{FR1 = 2.0\,GHz, FR3 = 8.0\,GHz. Filter: 0x36.}{fig:5-2}
+\figpair{images/sec5_fig3.pdf}{FR1 = 3.5\,GHz, FR3 = 9.0\,GHz. Filter: 0x3E.}{fig:5-3}%
+        {images/sec5_fig4.pdf}{FR1 = 1.0\,GHz, FR3 = 13.0\,GHz. Filter: 0x3F.}{fig:5-4}
+\figpair{images/sec5_fig5.pdf}{FR1 = 2.0\,GHz, FR3 = 14.0\,GHz. Filter: 0x14.}{fig:5-5}%
+        {images/sec5_fig6.pdf}{FR1 = 3.5\,GHz, FR3 = 15.0\,GHz. Filter: 0x1E.}{fig:5-6}
+\figpair{images/sec5_fig7.pdf}{FR1 = 1.0\,GHz, FR3 = 19.0\,GHz. Filter: 0x1F.}{fig:5-7}%
+        {images/sec5_fig8.pdf}{FR1 = 2.0\,GHz, FR3 = 19.0\,GHz. Filter: 0x1F.}{fig:5-8}
+\figsidecap{images/sec5_fig9.pdf}{FR1 = 3.5\,GHz, FR3 = 18.5\,GHz. Filter: 0x1E. Tip: this configuration compresses early (output P1dB +4.9\,dBm, against +14 to +18\,dBm at most other points). Near the top of the IF band (FR1~=~3.5\,GHz) with a high LO, TX compression starts earlier; if you need more output power, use a lower FR1 for the same FR3. Running the unit cooler helps only a little: with the LMX2820 die at about 60\textdegree C instead of 83\textdegree C, the output P1dB here rose by about 1\,dB (from +4.9 to +6.0\,dBm).}{fig:5-9}

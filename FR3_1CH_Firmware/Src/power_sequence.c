@@ -31,3 +31,18 @@ void PowerSequence_Init(void)
   HAL_Delay(200U);
 #endif
 }
+
+void PowerSequence_SetTcxo(bool on)
+{
+#if BOARD_HAS_POWER_SEQUENCING
+  /* Same CRITICAL rule as above: TCXO_EN_3V3 is grounded on rev 1.1 - this only ever runs where
+     BOARD_HAS_POWER_SEQUENCING is 1. Turning the TCXO on waits the same 10 ms settle as boot. */
+  HAL_GPIO_WritePin(TCXO_EN_3V3_GPIO_Port, TCXO_EN_3V3_Pin, on ? GPIO_PIN_SET : GPIO_PIN_RESET);
+  if (on)
+  {
+    HAL_Delay(10U);
+  }
+#else
+  (void)on;
+#endif
+}

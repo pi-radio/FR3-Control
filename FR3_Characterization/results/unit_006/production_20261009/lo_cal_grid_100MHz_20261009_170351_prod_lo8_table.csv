@@ -1,0 +1,2 @@
+lo_ghz,lmx_power,ref_filter,ref_model_s21_db,ref_i_v,ref_q_v,null_search_dbm,ref_dbm_in_sweep,n_states,min_dbm,max_dbm,n_blocking,floor_dbm,lmx_temp_c,seconds
+8.0,0,0x3D,-7.0,0.01995,0.0613,-59.85,-61.77,6,-61.77,-29.2,2,-42.44,62.7,21.7

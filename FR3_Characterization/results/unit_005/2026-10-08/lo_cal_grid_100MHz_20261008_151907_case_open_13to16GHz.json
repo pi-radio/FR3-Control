@@ -1,0 +1,15 @@
+{
+  "script": "lo_cal_grid_scan.py",
+  "started": "2026-10-08T15:19:07",
+  "lo_start_ghz": 13.0,
+  "lo_stop_ghz": 16.0,
+  "step_mhz": 100.0,
+  "n_los": 31,
+  "lmx_power": 0,
+  "blocking_db": 40.0,
+  "zero_bias": false,
+  "null_span_hz": 1000000.0,
+  "setup": "LABEL: Case Open. Board out of the case, LVA+Mixer MCS piece REMOVED by the user (compare with case_open_with_LVA_mixer_MCS_13to16GHz). FR1 1 GHz, FR3 = LO + 1 GHz, upper sideband (IQ THRU). FieldFox source OFF throughout. Reference null at the least-loss state, 1 MHz null span, applied to every usable state. LMX drive 0.",
+  "label": "Case Open",
+  "label_note": "board out of the case; LVA+Mixer MCS piece removed"
+}

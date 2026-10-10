@@ -1,0 +1,56 @@
+\clearpage
+\section{TX-side Conversion Gain --- Lower Sideband (Spectral Flip)}
+\label{sec:tx-gain-lower}
+
+\textbf{What is conversion gain?} Exactly as in Section~\ref{sec:tx-gain-upper}: the power of the signal coming out of the ``TX-side FR3 RF Out'' connector, minus the power of the signal fed into the ``TX-side FR1 IF In'' connector, both in dBm, gives
+the conversion gain in dB. Only the sideband changes here, now the lower one instead of the upper.
+
+\textbf{What's plotted.} Identical methodology to Section~\ref{sec:tx-gain-upper}, with the unit tuned to the
+lower sideband instead of the upper: each of the first seven figures holds FR1 fixed at one center value (1.0
+up to the unit's 4.0\,GHz maximum, in 0.5\,GHz steps) and plots conversion gain against the full measured FR3
+range for that input.\footnote{Every point on both traces is a real measurement, never a simulation or an
+interpolation between sparse samples: the FieldFox's built-in tracking generator drives FR1 while the
+FieldFox's own receiver tracks the corresponding FR3 output in lock-step, at a calibrated −40\,dBm input
+level.} Grey is the raw amplifier-and-mixer chain with the AM3153 filter bypassed; blue is the filter engaged.
+Both traces plot the \emph{average} conversion gain across each point's own real swept window, nominally
+500\,MHz wide (the same for every point on every panel) --- mean linear power, converted back to dB, not a
+single CW tone: what a real wideband signal occupying that window would experience. The gap between the two
+traces, at any point, is exactly how much the filter costs in insertion loss there, same as in
+Section~\ref{sec:tx-gain-upper}.
+
+\textbf{Measurement conditions.} \lmxDriveRule{} (set from the LO frequency), with the LO leakage suppressed by the unit's stored LO-null calibration (Section~\ref{sec:lo-suppression}), exactly as in normal use. The unit was measured hot, as the worst case: no fan, LMX2820 die at \condGainMinC--\condGainMaxC\textdegree C. A cooler unit will typically do somewhat better.
+
+\textbf{How the filter is chosen.} The same two-step rule as Section~\ref{sec:tx-gain-upper}: first find
+whichever of the 48 candidate configurations (3 bands × 16 sub-states) passes the most desired-sideband
+energy on its own, ignoring the image; then, restricted to candidates within 3\,dB of that best desired power,
+choose whichever rejects the image the most. Consecutive points that land on the same filter form a
+\emph{region}; the dashed vertical lines on each panel mark every boundary between regions, and the blue hex
+code running up from the x-axis inside each region (e.g.\ \texttt{0x30}) is the actual \texttt{filter\_bits}
+value used for every point in it --- so, just as in Section~\ref{sec:tx-gain-upper}, the exact filter behind
+any measurement on these panels is always readable directly off the figure, with no need to consult a separate
+table.
+
+\textbf{Window width.} Every point's window is exactly 500\,MHz wide, the same fixed window used throughout
+Section~\ref{sec:tx-gain-upper}: a fixed filter setting's measured response across that full window is exactly
+what a real wideband signal at that setting would experience.\footnote{As in Section~\ref{sec:tx-gain-upper},
+Figure \ref{fig:2-7} (FR1 = 4.0\,GHz) is the one exception: its window is 3.75--4.25\,GHz, and 250\,MHz of that
+exceeds the unit's 0.7--4.0\,GHz IF design spec --- called out directly on that panel and outlined in red on
+Figures \ref{fig:2-8} and \ref{fig:2-9}.} For the lower sideband, the masked (invalid-LO) region of the heatmaps
+sits at the opposite end of the FR3 axis from the upper sideband, since LO = FR3 + FR1 here rather than
+FR3 − FR1. Those two heatmaps repeat the bypassed and optimal data across the full measured (FR1, FR3) grid,
+for a single-glance view instead of the seven separate slices above, exactly as in Section~\ref{sec:tx-gain-upper}.
+
+\figpair{images/sec2_fig1.pdf}{FR1 = 1.0\,GHz.}{fig:2-1}%
+        {images/sec2_fig2.pdf}{FR1 = 1.5\,GHz.}{fig:2-2}
+\figpair{images/sec2_fig3.pdf}{FR1 = 2.0\,GHz.}{fig:2-3}%
+        {images/sec2_fig4.pdf}{FR1 = 2.5\,GHz.}{fig:2-4}
+\figpair{images/sec2_fig5.pdf}{FR1 = 3.0\,GHz.}{fig:2-5}%
+        {images/sec2_fig6.pdf}{FR1 = 3.5\,GHz.}{fig:2-6}
+
+\figonesmall{images/sec2_fig7.pdf}{FR1 = 4.0\,GHz. 250\,MHz of this window falls outside the unit's IF design spec (shown in red).}{fig:2-7}
+\figrow{images/sec2_fig8.pdf}{Conversion gain, lower sideband: full measured (FR1, FR3) grid, filter bypassed.
+Zoom in to read each cell's exact values, printed as (FR1, FR3, conversion gain), with FR1 and FR3 in GHz and
+the conversion gain in dB.}{fig:2-8}
+\figrow{images/sec2_fig9.pdf}{Conversion gain, lower sideband: full measured (FR1, FR3) grid, optimal filter.
+Zoom in to read each cell's exact values, printed as (FR1, FR3, conversion gain), with FR1 and FR3 in GHz and
+the conversion gain in dB.}{fig:2-9}

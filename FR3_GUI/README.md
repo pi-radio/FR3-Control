@@ -43,8 +43,10 @@ change a value the cursor happens to pass over.
  │  - Device discovery      │      1 response line       │  - LMX2820 LO synthesizer  │
  │  - Per-board tabs        │                             │  - LTC2668 I/Q bias DAC    │
  │  - Configuration Helper  │                             │  - Clock/LO/IQ GPIO switch │
- │  - Suggest I_V/Q_V       │                             │  - AM3153 RF filter control│
+ │  - LO-suppression status │                             │  - AM3153 RF filter control│
  │  - Local settings cache  │                             │  - EDATA settings storage  │
+ │                          │                             │  - LO drive rule, per-unit │
+ │                          │                             │    LO-null calibration     │
  └─────────────────────────┘                             └───────────────────────────┘
 ```
 
@@ -71,10 +73,10 @@ All GUI code lives under `fr3_gui/`, with bundled calibration data under
 | `main_window.py` | The main window: turns discovery's connect/disconnect signals into tabs appearing and disappearing, and does a one-time auto-size of the window at startup to fit the first tab's content. |
 | `device_tab.py` | The per-board tab UI: builds the collapsible "Configuration Helper", "Clocking and LO", "TX Settings", and "RX Settings" sections shown for a given board's capabilities, and reflects live values read back from the board. |
 | `widgets.py` | Small reusable input widgets used by `device_tab.py`: a debounced slider+spinbox voltage control, a Bank/Configuration filter control (used for both TX and RX), and a spinbox that displays uppercase hex. |
-| `configuration_helper.py` | The "Configuration Helper": takes the desired FR1 (IF) frequency, FR3 (RF) frequency, and sideband, computes the LMX2820 frequency that produces that FR3 output, and tunes it automatically. Also plots where the desired sideband, undesired sideband, and LO leakage land, overlaid with a candidate filter's real measured response, and offers "Suggest Filter"/"Automatically Select Filter" to recommend one - the recommendation itself isn't TX- or RX-specific, it's just published for TX/RX Settings to apply if they choose to. |
+| `configuration_helper.py` | The "Configuration Helper": takes the desired FR1 (IF) frequency, FR3 (RF) frequency, and sideband, computes the LMX2820 frequency that produces that FR3 output, and tunes it automatically. Also always suggests a filter for the current inputs and plots where the desired sideband, undesired sideband, and LO leakage land, overlaid with the suggested filter's real measured response ("Suggested Filter: ..."). The suggestion isn't TX- or RX-specific; it's published for TX/RX Settings to apply if they choose to. |
 | `no_wheel_filter.py` | An application-wide Qt event filter (installed once in `main.py`) that blocks mouse-wheel scrolling from changing any spin box, combo box, or slider's value anywhere in the app. |
 | `am3153_filter.py` | Loads the 49 bundled AM3153 filter S-parameter measurement files and maps a filter control byte to its measured S21 response. |
-| `lo_suppression.py` | Loads the bundled LO-suppression calibration table and interpolates a suggested I_V/Q_V pair for a given LO frequency (used by "Suggest I_V and Q_V"). |
+| `lo_suppression.py` | FR3 1CH rev 1.1 only: loads the bundled LO-suppression table and interpolates a suggested I_V/Q_V pair for a given LO frequency ("Suggest I_V and Q_V"). Rev 1.4 boards (firmware 1.4.1) use their own per-unit calibration stored on the board instead (Section 5.5). |
 | `local_settings.py` | Per-machine, per-physical-unit GUI preferences (currently the Configuration Helper's FR1/FR3/bandwidth inputs), stored as JSON under the app data directory (see `paths.py`). Entirely separate from the board's own firmware persistence. |
 | `lmx_register_dialog.py` | A non-modal bring-up/debug dialog for reading raw LMX2820 registers directly. |
 | `logging_setup.py` | Console + rotating file logging, written under the app data directory (see `paths.py`). |
@@ -88,14 +90,17 @@ All GUI code lives under `fr3_gui/`, with bundled calibration data under
   data does and doesn't tell you).
 - `lo_suppression.csv` — 157 rows of `freq_ghz, i_v, q_v`: I/Q bias voltages
   measured on **one** calibration unit that null out the LMX2820's own LO
-  leakage at each frequency (see Section 6).
+  leakage at each frequency (see Section 6). **Used only for FR3 1CH rev 1.1.**
+  Rev 1.4 boards carry their own per-unit, two-temperature calibration in
+  flash, applied by the firmware (Section 5.5).
 
 ### 3.2 Tests (`tests/`)
 
-26 automated tests (`pytest`) covering the serial protocol layer
-(`test_device.py`, including the echo-skipping logic), the S-parameter
-lookup (`test_am3153_filter.py`), local settings persistence
-(`test_local_settings.py`), and the LO-suppression interpolation
+Automated tests (`pytest`) covering the serial protocol layer
+(`test_device.py`, including the echo-skipping logic), the firmware 1.4.1
+LO-control commands and their response parsing (`test_lo_control.py`), the
+S-parameter lookup (`test_am3153_filter.py`), local settings persistence
+(`test_local_settings.py`), and the rev 1.1 LO-suppression interpolation
 (`test_lo_suppression.py`). Run with:
 
 ```
@@ -107,11 +112,15 @@ pytest tests/ -q
 ## 4. Division of Responsibility: Firmware vs. Host GUI
 
 This is the most important thing to understand before trusting any number
-the GUI shows you: **the firmware only ever does exactly what a command
-tells it to** (tune to this frequency, set this voltage, select this
-filter). Every piece of *advice* — which filter to pick, which voltages to
-try — is computed by the host GUI from data files bundled with it, and the
-firmware has no idea any of that reasoning happened.
+the GUI shows you: **the firmware does what a command tells it to** (tune to
+this frequency, set this voltage, select this filter), with two exceptions on
+FR3 1CH rev 1.4 since firmware 1.4.1: it sets the LMX2820's **drive level**
+from the LO frequency, and it applies the unit's own **LO-suppression
+calibration** (the I/Q bias voltages) by itself, both by default and both
+switchable to manual (Sections 5.3 and 5.5). Every other piece of *advice* —
+which filter to pick, for example — is computed by the host GUI from data
+files bundled with it, and the firmware has no idea any of that reasoning
+happened.
 
 ### 4.1 Implemented on the board (firmware, `FR3_1CH_Firmware`)
 
@@ -124,12 +133,29 @@ firmware has no idea any of that reasoning happened.
 - Persisting every one of the above settings to the STM32H5's EDATA flash
   region on every change (`Settings_Save()`), so the board comes back up in
   the same state after a power cycle — without the GUI (or anything else)
-  needing to resend anything.
+  needing to resend anything. Automated scripts can suspend this with
+  `SET PERSIST OFF` (Section 5.2) to avoid wearing out flash, and must
+  restore it with `SET PERSIST ON` when done.
 - Storing the board's own serial number (factory-programmed once via `SET
   BOARD SERIAL`), used by the GUI purely to identify a physical unit
   independent of which COM port it enumerates on.
 - Two general-purpose test-point GPIOs (`TP1`, `TP2`) for bring-up
   diagnostics.
+- **FR3 1CH rev 1.4, firmware 1.4.1:**
+  - **LO drive rule** (`LMX PWR AUTO`, the default): before every tune the
+    firmware sets the LMX2820 output drive from the LO frequency — 0 for
+    LO ≤ 13 GHz, 2 for 13–20 GHz, 4 for LO ≥ 20 GHz. `LMX PWR <n>` switches to
+    a fixed, manual level.
+  - **Per-unit LO-suppression calibration**: a table of I/Q bias voltages on
+    a 100 MHz LO grid (7.0–22.5 GHz, 156 points), measured on *this* unit at
+    two temperatures (cold and hot), each pair stored with the LMX2820 die
+    temperature it was measured at. It lives in its own flash sector (with a
+    CRC), separate from the settings, and is written at the factory with the
+    `CAL` commands. With `IQBIAS AUTO` (the default) the firmware looks up and
+    interpolates the bias on every tune and re-applies it every 2 seconds as
+    the die temperature changes (never writing flash for it).
+  - **External LO switches the internal 10 MHz TCXO off** (`SET LO EXT`), and
+    `SET LO INT` switches it back on before re-tuning the LMX2820.
 
 ### 4.2 Implemented on the host (this GUI, no firmware involvement)
 
@@ -144,28 +170,45 @@ firmware has no idea any of that reasoning happened.
   and LO leakage positions are computed from the LO frequency, sideband
   choice, and your entered FR1/bandwidth; none of this is measured or read
   back from the board.
-- **"Suggest Filter" / "Automatically Select Filter"** — searches all 48
-  non-Bypass filter configurations against the bundled S-parameter data and
-  picks the one that best passes the desired sideband while rejecting the
-  undesired one, purely as a calculation over the data file. With
-  "Automatically Select Filter" checked (the default), this re-runs live
-  every time FR1, FR3, bandwidth, or sideband changes; unchecking it makes
-  "Suggest Filter" a manual button instead. Either way, the result is only
-  a recommendation - the Configuration Helper never sends `SET TXFILTER`/
-  `SET RXFILTER` itself.
-- **TX/RX Settings' "Automatically apply the Suggested Filter from the
-  Configuration Helper"** — each checkbox (checked by default, independent
-  of the other) is what actually sends `SET TXFILTER`/`SET RXFILTER`,
-  keeping that filter's Bank/Configuration control greyed out and in sync
-  with the current recommendation above. Unchecking either one hands that
-  specific filter back to manual Bank/Configuration selection - TX and RX
-  can be in "automatic" and "manual" mode independently of each other.
-- **"Suggest I_V and Q_V" / "Automatically set I_V and Q_V"** — looks up
-  the bundled calibration table (Section 3.1) for the current LO frequency
-  and interpolates a suggested bias voltage pair. With "Automatically set"
-  checked (the default), this re-applies live via `SET I_V`/`SET Q_V`
-  every time the LO is retuned, and greys out the I_V/Q_V sliders;
-  unchecking it hands them back to manual control.
+- **The suggested filter (Configuration Helper)** — always computed, live,
+  every time FR1, FR3, bandwidth, or sideband changes (there is no on/off
+  switch or "Suggest" button since GUI 1.4.1). It searches all 48
+  non-Bypass filter configurations against the bundled S-parameter data, in
+  two steps: first finds whichever configuration passes the most
+  desired-sideband energy, ignoring the undesired sideband entirely; then,
+  among only the configurations within 3dB of that best desired-sideband
+  power, picks whichever rejects the undesired sideband the most. This order
+  keeps rejection-seeking from crushing the wanted signal to squeeze out
+  marginal extra image suppression. The graph is titled "Suggested Filter:
+  0x.." and always shows the suggestion. It is only a recommendation - the
+  Configuration Helper never sends `SET TXFILTER`/`SET RXFILTER` itself, and
+  connecting to a unit doesn't change its filters (they follow the
+  suggestion from the next FR1/FR3/bandwidth/sideband change on).
+- **TX/RX Settings' "Use the Configuration Helper's suggested filter"** —
+  the one filter switch per path. Each checkbox (checked by default,
+  independent of the other) is what actually sends `SET TXFILTER`/`SET
+  RXFILTER`, keeping that filter's Bank/Configuration control greyed out and
+  in sync with the suggestion. Unchecking either one hands that specific
+  filter back to manual Bank/Configuration selection - TX and RX can be in
+  "suggested" and "manual" mode independently of each other. A note under
+  each shows the filter in use and, when it differs, the one suggested.
+- **LO suppression on rev 1.4 (firmware 1.4.1)** — the firmware does the
+  work (Section 4.1); the GUI only switches it with "Automatic LO suppression
+  from this unit's calibration" (`IQBIAS AUTO` / `IQBIAS MANUAL`), greys out
+  the I_V/Q_V sliders while it is on, and shows what is stored and applied:
+  the calibration's unit serial, date and cold/hot temperature ranges (with a
+  warning if there is none, it fails its CRC, or it was made for another
+  serial number), and the bias applied and the temperature it was computed
+  for (refreshed every 2 s). Moving a slider in manual mode sends
+  `SET I_V`/`SET Q_V`, which also switches the firmware to manual.
+- **Drive level on rev 1.4 (firmware 1.4.1)** — "Automatic (recommended)"
+  sends `LMX PWR AUTO`; unchecking it enables the 0–7 spin box (`LMX PWR <n>`).
+- **"Suggest I_V and Q_V" / "Automatically set I_V and Q_V" (rev 1.1
+  only)** — looks up the bundled table (Section 3.1) for the current LO
+  frequency and interpolates a suggested bias voltage pair. With
+  "Automatically set" checked (the default), this re-applies live via
+  `SET I_V`/`SET Q_V` every time the LO is retuned, and greys out the I_V/Q_V
+  sliders; unchecking it hands them back to manual control.
 - **Per-machine settings** (Configuration Helper's FR1/FR3/bandwidth
   inputs) — stored in a local JSON file next to the GUI, not on the board.
 
@@ -191,12 +234,14 @@ firmware has no idea any of that reasoning happened.
 | Command | Direction | Response | Notes |
 |---|---|---|---|
 | `*IDN?` | query | `<board name> REV<revision>,STM32H573VIT6,FW<fw version>` | Used by discovery to identify the board and revision. `<fw version>` is the firmware's `FIRMWARE_VERSION` (`board_config.h`) - kept matching the GUI's own version (`fr3_gui/version.py`). |
-| `SET BOARD SERIAL <n>` | set | `OK` | One-time factory step; `n` is an unsigned integer. Persists across power cycles. |
+| `SET BOARD SERIAL <n>` | set | `OK` | One-time factory step; `n` is an unsigned integer. Persists across power cycles. **Flashing firmware 1.4.1 onto a unit that ran 1.00 resets all stored settings, including this serial** (the settings format changed): send it again after the update. |
 | `GET BOARD SERIAL` | query | `<n>` | Defaults to `0` until set. Used as this unit's stable identity, independent of COM port. |
+| `SET PERSIST ON` / `SET PERSIST OFF` | set | `OK` | Runtime switch for flash persistence, for automated sweeps that change settings thousands of times. While `OFF`, changes take effect on the hardware but are **not** written to flash (`SET BOARD SERIAL` is the one exception and always writes). `ON` immediately writes the current live state, so while persistence is on, flash mirrors the live state. Not itself stored: **always `ON` after any reset or power cycle**. |
+| `GET PERSIST` | query | `ON` / `OFF` | |
 
 ```
 > *IDN?
-< FR3 1CH REV1.4,STM32H573VIT6,FW1.00
+< FR3 1CH REV1.4,STM32H573VIT6,FW1.4.1
 
 > GET BOARD SERIAL
 < 7
@@ -208,8 +253,10 @@ firmware has no idea any of that reasoning happened.
 |---|---|---|---|
 | `LMX TUNE <freq_hz>` | set | `OK` / `ERR` | 6,000,000,000 – 22,600,000,000 Hz |
 | `LMX FREQ?` | query | `<freq_hz>` | — |
-| `LMX PWR <0-7>` | set | `OK` / `ERR` | 0–7 (output drive level) |
-| `LMX PWR?` | query | `<0-7>` | — |
+| `LMX PWR <0-7>` | set | `OK` / `ERR` | 0–7 (output drive level). Rev 1.4, firmware 1.4.1: also switches the drive to MANUAL |
+| `LMX PWR AUTO` | set | `OK` | Rev 1.4, firmware 1.4.1 (the default): the drive follows the LO frequency on every tune — 0 for LO ≤ 13 GHz, 2 for 13–20 GHz, 4 for LO ≥ 20 GHz |
+| `LMX PWR MODE?` | query | `AUTO` / `MANUAL` | Rev 1.4, firmware 1.4.1 |
+| `LMX PWR?` | query | `<0-7>` | The level in use (in AUTO, the one the rule chose) |
 | `LMX MUTE ON` / `LMX MUTE OFF` | set | `OK` / `ERR` | `ON` fully powers the chip down; `OFF` re-tunes it and can take a couple of seconds |
 | `LMX MUTE?` | query | `ON` / `OFF` | — |
 | `LMX LOCK?` | query | `LOCKED` / `UNLOCKED` | Fresh SPI read every call |
@@ -231,7 +278,7 @@ firmware has no idea any of that reasoning happened.
 
 | Command | Direction | Response | Range |
 |---|---|---|---|
-| `SET I_V <volts>` | set | `OK` / `ERR` | −0.5 to +0.5 V (software-limited; DAC's own span is ±2.5V) |
+| `SET I_V <volts>` | set | `OK` / `ERR` | −0.5 to +0.5 V (software-limited; DAC's own span is ±2.5V). Rev 1.4, firmware 1.4.1: also switches the automatic LO suppression off (`IQBIAS MANUAL`), as does `SET Q_V` |
 | `GET I_V` | query | `<volts>` (6 decimals) | — |
 | `SET Q_V <volts>` | set | `OK` / `ERR` | −0.5 to +0.5 V |
 | `GET Q_V` | query | `<volts>` (6 decimals) | — |
@@ -243,7 +290,52 @@ firmware has no idea any of that reasoning happened.
 < -0.180000
 ```
 
-### 5.5 Clock / LO / IQ Source Switching
+### 5.5 LO-Suppression Calibration (FR3 1CH rev 1.4, firmware 1.4.1)
+
+Each unit carries its own calibration (Section 4.1): 156 LO frequencies (7.0,
+7.1, … 22.5 GHz = index 0 … 155), each with a **cold** (`C`) and a **hot**
+(`H`) entry of I_V, Q_V and the LMX2820 die temperature it was measured at.
+
+**How the bias is computed (`IQBIAS AUTO`):** for each grid entry, linearly
+between its cold and hot pair by the present die temperature (using each
+pair's own recorded temperature; extrapolated at most 10 °C beyond them);
+between grid points, linearly in frequency — except across the 13 GHz and
+20 GHz drive boundaries, where the nearest point on the same side is used.
+LO 6–7 GHz uses the 7.0 GHz entry, 22.5–22.6 GHz the 22.5 GHz entry. Applied
+on every tune, `SET LO INT` and `LMX MUTE OFF`, and every 2 s; paused while the
+LO is external or the LMX2820 is muted (the last values stay applied).
+
+| Command | Direction | Response | Notes |
+|---|---|---|---|
+| `IQBIAS AUTO` | set | `OK` / `ERR NOCAL` | Automatic LO suppression (the default). `ERR NOCAL` if no valid calibration is stored |
+| `IQBIAS MANUAL` | set | `OK` | Leaves I_V/Q_V where they are; `SET I_V`/`SET Q_V` do this too |
+| `IQBIAS?` | query | `AUTO <state> I=<V> Q=<V> T=<°C>` / `MANUAL I=<V> Q=<V>` | `<state>`: `ON` (applied), `NOCAL`, `EXTLO` (external LO, paused), `MUTED` (paused). I/Q are the DAC's present values; T is the die temperature the last automatic bias was computed for |
+| `CAL INFO?` | query | `N=<entries> FMT=<format> CRC=OK\|BAD SN=<serial> DATE=<yyyymmdd>` / `NONE` | The stored calibration; a full one has 312 entries |
+| `CAL TEMPS?` | query | `C=<min>..<max> H=<min>..<max>` / `ERR NOCAL` | Die-temperature range of the cold and the hot entries (°C) |
+| `CAL LO? <idx> <C\|H>` | query | `<I_V> <Q_V> <T>` / `ERR` | One stored entry (read back from flash) |
+| `CAL CLEAR` | set | `OK` | Factory upload: empties the RAM staging copy |
+| `CAL LO <idx> <C\|H> <I_V> <Q_V> <T>` | set | `OK` / `ERR` | Factory upload: one entry into the staging copy (I/Q in volts, \|value\| < 0.5; T in °C). Nothing changes until `CAL COMMIT` |
+| `CAL DATE <yyyymmdd>` | set | `OK` | Factory upload: calibration date |
+| `CAL STAGED?` | query | `<count>` | Factory upload: entries staged so far (312 needed) |
+| `CAL COMMIT` | set | `OK` / `ERR INCOMPLETE` / `ERR FLASH` / `ERR VERIFY` | Writes the staged table (with the unit's serial and a CRC) to its flash sector, reads it back and compares, then makes it active. Always written, whatever `SET PERSIST` says |
+
+I/Q are stored with a resolution of 1/65536 V (about 15 µV; the LO null is
+about 2 mV wide), temperatures with 0.1 °C. A full upload is 312 `CAL LO`
+lines (one entry per line: the firmware keeps at most 63 characters of a
+line).
+
+```
+> IQBIAS?
+< AUTO ON I=0.019950 Q=0.061300 T=63.6
+> CAL INFO?
+< N=312 FMT=1 CRC=OK SN=6 DATE=20261010
+> CAL TEMPS?
+< C=61.0..67.8 H=73.8..85.3
+> CAL LO? 10 C
+< 0.019950 0.061300 62.7
+```
+
+### 5.6 Clock / LO / IQ Source Switching
 
 | Command | Direction | Response |
 |---|---|---|
@@ -256,9 +348,14 @@ firmware has no idea any of that reasoning happened.
 
 Selecting `SET LO EXT` also mutes the internal LMX2820 (and `SET LO INT`
 un-mutes and re-tunes it) so the internal and external LO paths can never
-both drive the output at once.
+both drive the output at once. On rev 1.4 with firmware 1.4.1, `SET LO EXT`
+also switches the internal 10 MHz TCXO off (it is unused with an external
+LO, and would otherwise keep clocking the reference-clock buffer, whose
+10/20 MHz comb reaches the RX IF output), and `SET LO INT` switches it back
+on and lets it settle before re-tuning. An external 10 MHz reference
+(`SET CLOCK EXT`) still drives the buffer either way.
 
-### 5.6 RF Filters (FR3 1CH rev 1.4 only)
+### 5.7 RF Filters (FR3 1CH rev 1.4 only)
 
 | Command | Direction | Response |
 |---|---|---|
@@ -281,7 +378,7 @@ rev 1.1, where those same pins are hard-wired to ground.
 < 0x31
 ```
 
-### 5.7 Test Point Diagnostics
+### 5.8 Test Point Diagnostics
 
 | Command | Direction | Response |
 |---|---|---|
@@ -305,10 +402,11 @@ data on a small number of samples, or from illustrative reference levels.
 | **LMX2820 LO frequency** (`LMX TUNE`/`LMX FREQ?`) | **Exact.** | The firmware computes PLL_N/PLL_NUM/PLL_DEN directly from the requested frequency using a fractional-N denominator large enough to hit any requested integer Hz exactly (confirmed bit-exact against reference TI TICS Pro register dumps). What you ask for is what gets programmed. |
 | **LO frequency computed by the Configuration Helper from FR1/FR3/sideband** | **Exact.** | `f_lo = FR3 − FR1` (upper sideband) or `f_lo = FR3 + FR1` (lower sideband) is plain arithmetic on the frequencies you typed, not an estimate — the result is applied via the same exact `LMX TUNE` path as a manually entered frequency. If the required `f_lo` falls outside the Configuration Helper's allowed 7.0–22.6GHz range (a GUI-enforced floor above the LMX2820's own 6.0GHz hardware minimum), the GUI says so and does not apply it — the graph and filter suggestion also freeze on the last valid configuration rather than updating to one the LMX2820 could never actually be tuned to. |
 | **DAC bias voltages** (`SET I_V`/`SET Q_V`, `GET I_V`/`GET Q_V`) | **Exact, as digital-to-analog conversions.** | The 16-bit LTC2668 converts a requested voltage to a DAC code deterministically; this is not an estimate. |
-| **I_V/Q_V values suggested by "Suggest I_V and Q_V"** | **Estimate.** | These come from a table measured on **one** calibration unit's LO leakage at each frequency, linearly interpolated between the nearest two measured points. Actual optimal values will vary somewhat from unit to unit and with temperature — treat the suggestion as a good starting point to fine-tune from, not a guaranteed null. The table only covers 7.0–22.6GHz; below that the recommended approach is a high-side LO with the lower sideband instead (the GUI will tell you this rather than guessing). |
+| **I_V/Q_V applied by the automatic LO suppression** (rev 1.4, firmware 1.4.1) | **Measured on this unit, interpolated.** | The calibration is measured on the unit itself, at about 100 MHz LO spacing and two die temperatures, then interpolated in frequency and temperature (Section 5.5). It nulls the leakage in the filter setting it was measured in; in other filter settings and configurations some leakage remains (the datasheet's LO-suppression section gives the measured spread). For the deepest null in one specific configuration, search it by hand there (`SET I_V`/`SET Q_V`). |
+| **I_V/Q_V values suggested by "Suggest I_V and Q_V"** (rev 1.1) | **Estimate.** | These come from a table measured on **one** calibration unit's LO leakage at each frequency, linearly interpolated between the nearest two measured points. Actual optimal values will vary somewhat from unit to unit and with temperature — treat the suggestion as a good starting point to fine-tune from, not a guaranteed null. The table only covers 7.0–22.6GHz; below that the recommended approach is a high-side LO with the lower sideband instead (the GUI will tell you this rather than guessing). |
 | **AM3153 filter S21 response shown in the Configuration Helper graph** | **Real measured data, but from one filter sample.** | The 49 `.s2p` files are actual network-analyzer sweeps of one AM3153 filter, not simulated or datasheet-typical curves. Unit-to-unit variation between filters is not captured. |
 | **Desired/undesired sideband and LO leakage *levels* drawn in the Configuration Helper graph** | **Illustrative only — not measured amplitudes.** | Their vertical extents (0 to −50dB for desired/LO, −15 to −50dB for undesired) are reference conventions chosen to make the plot readable, not a measurement of your actual signal chain. Only their horizontal (frequency) positions are computed from real inputs. |
-| **Rejection dB figure shown for a filter selection or by "Suggest Filter"** | **Estimate.** | It is the real filter's own measured S21 difference between the desired and undesired sideband frequencies, **plus** a fixed assumed baseline mixer suppression (15dB, matching the graph's illustrative desired/undesired gap) that is not separately measured for your specific mixer. Treat it as a useful ranking between filter choices, not a guaranteed system-level rejection number. The display is also capped at ">50dB" above that threshold, since real filter behavior won't track the measured S-parameter data that precisely at very high rejection. |
+| **Rejection dB figure shown for the suggested filter** | **Estimate.** | It is the real filter's own measured S21 difference between the desired and undesired sideband frequencies, **plus** a fixed assumed baseline mixer suppression (15dB, matching the graph's illustrative desired/undesired gap) that is not separately measured for your specific mixer. Treat it as a useful ranking between filter choices, not a guaranteed system-level rejection number. The display is also capped at ">50dB" above that threshold, since real filter behavior won't track the measured S-parameter data that precisely at very high rejection. |
 | **LMX lock status** (`LMX LOCK?`) | **Exact.** | A fresh SPI readback of the synthesizer's own lock-detect register, decoded into LOCKED or UNLOCKED. The register's own rb_LD field actually has a third, "invalid" state (0b11) per TI's register map, but the firmware reports that as UNLOCKED too rather than exposing it as a distinct third value. |
 | **LMX2820 die temperature** (`LMX TEMP?`) | **Estimate — ±5°C per datasheet.** | Computed from a fresh SPI readback of the chip's own `rb_TEMP_SENS` field using TI's published `Temp_C = 0.85 × code − 415` formula (0.6°C/code resolution). TI's own E2E forum has an open, TI-acknowledged discrepancy between this formula and their own characterization data, so treat the displayed value as a rough indicator, not a calibrated measurement. |
 | **Board serial number, filter bit readback, clock/LO/IQ source state** | **Exact.** | All are direct digital readbacks (persisted settings or live GPIO levels), not estimates. |
@@ -321,11 +419,15 @@ The GUI only shows controls a board revision actually has, based on a
 static table (`capabilities.py`) that mirrors the firmware's own
 `BOARD_HAS_*` compile-time flags (`board_config.h`) exactly:
 
-| Board | Revision | LMX2820 | LTC2668 I/Q DAC | Clock Switch | LO Switch | IQ Swap | RF Filters |
-|---|---|---|---|---|---|---|---|
-| FR3 1CH | 1.1 | Yes | Yes | Yes | Yes | Yes | No |
-| FR3 1CH | 1.4 | Yes | Yes | Yes | Yes | Yes | Yes |
-| OctoLO | 1.4 | Yes | No | No | No | No | No |
+| Board | Revision | LMX2820 | LTC2668 I/Q DAC | Clock Switch | LO Switch | IQ Swap | RF Filters | LO Control (1.4.1) |
+|---|---|---|---|---|---|---|---|---|
+| FR3 1CH | 1.1 | Yes | Yes | Yes | Yes | Yes | No | No |
+| FR3 1CH | 1.4 | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| OctoLO | 1.4 | Yes | No | No | No | No | No | No |
+
+"LO Control" is firmware 1.4.1's drive rule, per-unit LO-suppression
+calibration and TCXO-off-with-external-LO (`BOARD_HAS_LO_CONTROL`), measured
+and enabled on FR3 1CH rev 1.4 only.
 
 FR3 1CH rev 1.1 does not have the RF filter or power-sequencing hardware at
 all — on that revision, the pins rev 1.4 uses for those features are

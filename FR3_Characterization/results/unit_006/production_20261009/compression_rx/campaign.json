@@ -1,0 +1,90 @@
+{
+  "script": "rx_compression_campaign.py",
+  "lmx_power": "drive rule",
+  "start_dbm_at_source": -60.0,
+  "max_input_at_board_dbm": -5.0,
+  "stop_at_compression_db": 5.0,
+  "attenuation_db": 35,
+  "tx_side": "normal use (rx_tx_side.py)",
+  "bias": "cal tables interpolated:  / results\\unit_006\\production_20261009\\lo_cal_grid_100MHz_20261009_170351_prod_lo8_table.csv + results\\unit_006\\production_20261009\\lo_cal_grid_100MHz_20261009_170417_prod_lo16_20_table.csv",
+  "points": {
+    "low": [
+      [
+        1.0,
+        9.0
+      ],
+      [
+        2.0,
+        9.0
+      ],
+      [
+        3.5,
+        11.5
+      ],
+      [
+        1.0,
+        13.0
+      ],
+      [
+        2.0,
+        15.0
+      ],
+      [
+        3.5,
+        17.5
+      ],
+      [
+        1.0,
+        19.0
+      ],
+      [
+        2.0,
+        22.0
+      ],
+      [
+        3.5,
+        25.5
+      ]
+    ],
+    "high": [
+      [
+        1.0,
+        8.0
+      ],
+      [
+        2.0,
+        8.0
+      ],
+      [
+        3.5,
+        9.0
+      ],
+      [
+        1.0,
+        13.0
+      ],
+      [
+        2.0,
+        14.0
+      ],
+      [
+        3.5,
+        15.0
+      ],
+      [
+        1.0,
+        19.0
+      ],
+      [
+        2.0,
+        19.0
+      ],
+      [
+        3.5,
+        18.5
+      ]
+    ]
+  },
+  "started": "2026-10-09T17:25:03-04:00",
+  "ff_idn": "Keysight Technologies,N9918B,MY63185042,A.13.25"
+}

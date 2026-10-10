@@ -1,0 +1,105 @@
+\clearpage
+\section{TX-side Gain Flatness}
+\label{sec:tx-flatness}
+\raggedbottom% no stretched gaps between text and figures (as in the NF section)
+\input{sections/flatness_numbers}
+
+\textbf{What is gain flatness?} Sections~\ref{sec:tx-gain-upper} and \ref{sec:tx-gain-lower} give the
+\emph{average} conversion gain across a 500\,MHz window. A wideband signal also cares how much the gain varies
+\emph{within} that window: if one part of the channel is amplified more than another, the signal comes out with a
+tilted or rippled spectrum, and the pieces of it that sit at different frequencies (for example the sub-carriers of
+an OFDM signal) arrive at different levels. A perfectly flat channel has the same gain at every frequency in the
+window. Gain flatness measures how far the unit is from that ideal.
+
+\textbf{How it's measured.} At every (FR1, FR3) point of the grid, the FieldFox's tracking generator sweeps a
+500\,MHz window centred on FR1 into the ``TX-side FR1 IF In'' port at −40\,dBm, in 101 steps 5\,MHz apart, while
+the FieldFox's receiver follows the output at the ``TX-side FR3 RF Out'' port in lock-step. This gives the
+conversion gain at 101 frequencies across the window. The signal level arriving at the unit was measured directly
+beforehand, by connecting the FieldFox's source to its own receiver through the same input cable, so any unevenness
+of the instrument and the cable is removed instead of being counted against the unit; the output cable's loss is
+removed from its own calibration. Each window is measured twice, back to back, with the LO unchanged: once with the
+AM3153 filter bypassed and once with the ``optimal'' filter, chosen by the same rule as everywhere else in this
+datasheet (Section~\ref{sec:tx-gain-upper}). The filter setting never changes during a sweep. The grid is the same as
+for conversion gain: FR1 centred at 1.0--4.0\,GHz and FR3 at 6.0--26.0\,GHz, both in 0.5\,GHz steps, wherever the
+LO lands between 7 and 22.6\,GHz.\footnote{The one grid point at FR3 = 26.5\,GHz (upper sideband, FR1 = 4.0\,GHz) is
+not measured: its window would run past the 26.5\,GHz top of the FieldFox's range.}
+
+\textbf{Measurement conditions.} \lmxDriveRule{} (set from the LO frequency), with the LO leakage suppressed by the unit's stored LO-null calibration (Section~\ref{sec:lo-suppression}), exactly as in normal use. The unit was measured hot, as the worst case: no fan, LMX2820 die at \condFlatMinC--\condFlatMaxC\textdegree C. A cooler unit will typically do somewhat better.
+
+\textbf{The number: RMS flatness.} Each window gives 101 gain readings G\textsubscript{1} to G\textsubscript{101}, in
+dB. First, the window's power-average gain is found: average the gains as linear power ratios, then convert back to
+dB,
+\begin{center}
+G\textsubscript{avg} = 10·log\textsubscript{10}( mean of 10\textsuperscript{G\textsubscript{k}/10} ),
+\end{center}
+which is the single, constant gain that would deliver the same total power (the window average plotted in
+Sections~\ref{sec:tx-gain-upper} and \ref{sec:tx-gain-lower}). The RMS flatness is then the root-mean-square of
+how far each reading sits from that level:
+\begin{center}
+RMS flatness = √( mean of (G\textsubscript{k} − G\textsubscript{avg})\textsuperscript{2} ).
+\end{center}
+0\,dB means perfectly flat; the larger the number, the more uneven the gain across the window. For a feel of
+scale: in this data the full spread from the lowest to the highest gain in a window (peak-to-peak) is typically
+about \flatTxPpRatio{} times the RMS flatness (between \flatTxPpRatioLow{} and \flatTxPpRatioHigh{} times at 80\% of
+the points).
+
+\textbf{Results.} Within the design spec (FR3~$\le$~24\,GHz, and FR1 centre~$\le$~3.5\,GHz, since the window at
+FR1 = 4.0\,GHz runs past the IF spec):
+\par\medskip\noindent\begin{minipage}{\linewidth}% caption and table stay on one page
+\begin{center}
+\captionof{table}{TX-side RMS gain flatness within the design spec, by sideband and filter setting.}\label{tab:txflat-results}
+\vspace{0.4em}
+\begin{tabular}{lcccc}
+\toprule
+ & Median & 90\% of points at or below & Best & Worst \\
+\midrule
+Upper sideband, filter bypassed & \flatTxUpperBypassMedian\,dB & \flatTxUpperBypassPninety\,dB & \flatTxUpperBypassMin\,dB & \flatTxUpperBypassMax\,dB \\
+Upper sideband, optimal filter & \flatTxUpperOptimalMedian\,dB & \flatTxUpperOptimalPninety\,dB & \flatTxUpperOptimalMin\,dB & \flatTxUpperOptimalMax\,dB \\
+Lower sideband, filter bypassed & \flatTxLowerBypassMedian\,dB & \flatTxLowerBypassPninety\,dB & \flatTxLowerBypassMin\,dB & \flatTxLowerBypassMax\,dB \\
+Lower sideband, optimal filter & \flatTxLowerOptimalMedian\,dB & \flatTxLowerOptimalPninety\,dB & \flatTxLowerOptimalMin\,dB & \flatTxLowerOptimalMax\,dB \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{minipage}\par
+Engaging the optimal filter changes the flatness only a little: its median is slightly lower than with the filter
+bypassed, for both sidebands.
+
+\textbf{Where it's flattest, and how to use that.} The flatness depends mostly on where the signal sits in FR1, and
+much less on FR3 or on the sideband. In the heatmaps this shows up as whole columns of similar colour. The median per
+FR1 centre (all FR3 up to 24\,GHz):
+\par\medskip\noindent\begin{minipage}{\linewidth}% caption and table stay on one page
+\begin{center}
+\captionof{table}{TX-side median RMS gain flatness for each FR1 centre (all FR3 up to 24\,GHz).}\label{tab:txflat-by-fr1}
+\vspace{0.4em}
+\footnotesize
+\input{sections/flatness_tx_by_fr1}
+\end{center}
+\end{minipage}\par
+Windows centred at FR1 = 1.0 or 3.0\,GHz are the flattest, and windows centred at 1.5--2.0 or 3.5\,GHz the least
+flat. So when flatness matters and you are free to choose the IF, centre the signal near 1.0 or 3.0\,GHz in FR1.
+
+\textbf{What's plotted.} For each sideband and filter setting, a heatmap of the RMS flatness over the full measured
+(FR1, FR3) grid, and a histogram of the same values. All flatness heatmaps in this datasheet (TX and RX) share one
+colour scale, 0--4\,dB, darker meaning flatter. On the heatmaps, points above the rated 24\,GHz are boxed in red, as
+is the FR1 = 4.0\,GHz column, whose window runs 250\,MHz past the IF spec: measured and shown, but out of design
+spec. The histograms count only the points within the design spec.
+
+\figpair{images/flat_tx_upper_bypass_map.pdf}{RMS gain flatness, upper sideband: full measured (FR1, FR3) grid,
+filter bypassed. Zoom in to read each cell's exact values, printed as (FR1, FR3, RMS flatness), with FR1 and FR3 in
+GHz and the RMS flatness in dB.}{fig:txflat-1}%
+        {images/flat_tx_upper_bypass_hist.pdf}{Sideband: Upper. Filter: Bypassed. Distribution of
+Figure~\ref{fig:txflat-1}, points within the design spec.}{fig:txflat-2}
+\figpair{images/flat_tx_upper_optimal_map.pdf}{RMS gain flatness, upper sideband: full measured (FR1, FR3) grid,
+``optimal'' filter engaged at every point.}{fig:txflat-3}%
+        {images/flat_tx_upper_optimal_hist.pdf}{Sideband: Upper. Filter: Optimal. Distribution of
+Figure~\ref{fig:txflat-3}, points within the design spec.}{fig:txflat-4}
+\clearpage
+\figpair{images/flat_tx_lower_bypass_map.pdf}{RMS gain flatness, lower sideband: full measured (FR1, FR3) grid,
+filter bypassed.}{fig:txflat-5}%
+        {images/flat_tx_lower_bypass_hist.pdf}{Sideband: Lower. Filter: Bypassed. Distribution of
+Figure~\ref{fig:txflat-5}, points within the design spec.}{fig:txflat-6}
+\figpair{images/flat_tx_lower_optimal_map.pdf}{RMS gain flatness, lower sideband: full measured (FR1, FR3) grid,
+``optimal'' filter engaged at every point.}{fig:txflat-7}%
+        {images/flat_tx_lower_optimal_hist.pdf}{Sideband: Lower. Filter: Optimal. Distribution of
+Figure~\ref{fig:txflat-7}, points within the design spec.}{fig:txflat-8}
+\flushbottom

@@ -1,0 +1,20 @@
+{
+  "script": "tx_2lo_type4_sweep.py",
+  "experiment": "Type 4",
+  "started": "2026-10-07T13:44:19",
+  "unit_serial": 5,
+  "fr1_ghz": 1.0,
+  "sideband": "upper",
+  "fr3_ghz": [
+    13.25,
+    13.5,
+    13.75,
+    14.0
+  ],
+  "lmx_power": 0,
+  "iq": "THRU",
+  "tx_filter": "optimal per point",
+  "input": "off (FieldFox source OFF)",
+  "setup": "Extension of run25 to FR3 14 GHz (user). Experiment Type 4, CASE ON (both halves), LMX drive 0, FieldFox source OFF. MCS squares on PCB in place; none on the chips. TX-side FR3 RF Out -> FR3 cable -> FieldFox input.",
+  "readings": "LO and 2LO at TX-side FR3 RF Out, FR3 cable corrected; 1 MHz span, RBW 10 kHz, 30 dB att, no averaging, peak search, continuous sweep ON"
+}

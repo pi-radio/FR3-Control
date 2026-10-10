@@ -458,3 +458,11 @@ uint16_t LMX2820_ReadRegisterRaw(uint8_t addr)
 {
   return LMX2820_ReadRegister(addr);
 }
+
+void LMX2820_WriteRegisterRaw(uint8_t addr, uint16_t data)
+{
+  LMX2820_WriteRegister(addr, data);
+  /* The chip no longer matches the template, so the next Tune()/unmute must do
+   * the full 123-register write to restore a known configuration. */
+  lmx2820_initialized = false;
+}

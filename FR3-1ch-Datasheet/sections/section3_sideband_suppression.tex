@@ -1,0 +1,32 @@
+\clearpage
+\section{TX-side Sideband Suppression}
+\label{sec:sideband-suppression}
+
+\textbf{What's plotted.} This section shows how well the unit separates the sideband you want from the
+mirror-image sideband you don't want.\footnote{Every point is one real measurement, using discrete CW tones ---
+this replaced an earlier reversed-tracking-generator method found to be unreliable for weak-signal
+measurement.} At every (FR1, FR3) point of the same grid as Sections~\ref{sec:tx-gain-upper} and \ref{sec:tx-gain-lower}, the unit is tuned to that point's LO frequency and a single tone at −40\,dBm is sent into the ``TX-side FR1 IF In'' connector, at the FR1 centre frequency. Two things are measured at the ``TX-side FR3 RF Out'' connector: how strong the wanted (desired) output is, and how strong the unwanted (undesired) mirror-image output is. Suppression, in dB, is just the difference: desired power minus undesired power. Bigger is better --- it means the unwanted signal is much weaker than the wanted one. Because each point is one tone at the FR1 centre, FR1~=~4.0\,GHz is inside the IF design spec here (unlike the 500\,MHz-wide windows of the gain sections); only FR3 above 24\,GHz is out of spec.
+
+\textbf{Measurement conditions.} \lmxDriveRule{} (set from the LO frequency), with the LO leakage suppressed by the unit's stored LO-null calibration (Section~\ref{sec:lo-suppression}), exactly as in normal use. The LO suppression matters here: the amplifiers mix the desired tone with any leftover LO leakage, and one of the resulting products, at twice the LO frequency minus the desired frequency, lands exactly on the undesired sideband. The unit was measured hot, as the worst case: no fan, LMX2820 die at \condSbMinC--\condSbMaxC\textdegree C.
+
+\textbf{Results.} Within the design spec, the median suppression is \sbUpperBypassMedian\,dB (upper sideband) and \sbLowerBypassMedian\,dB (lower) with the filter bypassed, and \sbUpperOptimalMedian\,dB and \sbLowerOptimalMedian\,dB with the optimal filter; 90\% of points do better than \sbUpperOptimalPten\,dB and \sbLowerOptimalPten\,dB respectively with the optimal filter. With the optimal filter the undesired tone is often very weak, and a single reading of it can move by several dB from one measurement to the next, so read the optimal-filter figures as a distribution rather than point by point.
+
+\textbf{How the ``optimal'' filter is chosen.} There is no single best filter setting for the whole unit.
+Every point on the optimal figures picks its own best filter for that particular (FR1, FR3, sideband)
+combination, out of 48 possible choices. The choice balances two goals: keep the desired signal strong, and
+make the undesired signal weak.\footnote{The rule, in two steps: first, find the filter that lets through the
+most desired-signal power. Then, look only at filters within 3\,dB of that best value, and among those pick
+whichever blocks the undesired signal best. This is just \emph{one} way to balance the two goals --- not the
+only possible way.} The bypass figures show what happens with no filter at all; they don't depend on any
+selection rule, so they are a simple, honest baseline to compare against.
+
+\figpair{images/sec3_fig1.pdf}{Desired: upper. Filter: bypassed. Suppression (dB) across the full grid.}{fig:3-1}%
+        {images/sec3_fig2.pdf}{Desired: upper. Filter: bypassed. Distribution of Figure~\ref{fig:3-1}.}{fig:3-2}
+\figpair{images/sec3_fig3.pdf}{Desired: upper. Filter: optimal. Suppression (dB) across the full grid.}{fig:3-3}%
+        {images/sec3_fig4.pdf}{Desired: upper. Filter: optimal. Distribution of Figure~\ref{fig:3-3}.}{fig:3-4}
+
+\newpage
+\figpair{images/sec3_fig5.pdf}{Desired: lower. Filter: bypassed. Suppression (dB) across the full grid.}{fig:3-5}%
+        {images/sec3_fig6.pdf}{Desired: lower. Filter: bypassed. Distribution of Figure~\ref{fig:3-5}.}{fig:3-6}
+\figpair{images/sec3_fig7.pdf}{Desired: lower. Filter: optimal. Suppression (dB) across the full grid.}{fig:3-7}%
+        {images/sec3_fig8.pdf}{Desired: lower. Filter: optimal. Distribution of Figure~\ref{fig:3-7}.}{fig:3-8}

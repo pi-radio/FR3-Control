@@ -1,0 +1,147 @@
+\clearpage
+\section{RX-side Noise Figure and Sensitivity}
+\label{sec:rx-noise-figure}
+\raggedbottom% this section's pages end naturally (no stretched gaps); restored at the end
+\input{sections/sec12_numbers}
+
+This section first explains what noise figure is, how it sets the receiver's sensitivity, and how it was measured
+(Section~\ref{sec:nf-concept}). It then gives the measured noise figure with the ``optimal'' AM3153 filter engaged
+(Section~\ref{sec:nf-optimal}), the setting most users will run.
+
+\subsection{Noise Figure: The Concept}
+\label{sec:nf-concept}
+
+\textbf{A Motivating Example.} Every receiver adds some noise of its own to whatever it receives. Even with
+nothing at all connected to the ``RX-side FR3 RF In'' connector except a 50\,$\Omega$ termination, the termination's
+own thermal noise comes in --- about −174\,dBm in every 1\,Hz of bandwidth at room temperature --- and every amplifier, mixer, and filter along the RX chain then adds more on top. The \emph{noise figure} (NF) measures how
+much the receiver makes things worse: it is how many dB noisier the output is than it would be if the
+receiver were a perfect, noiseless amplifier with the same gain. A receiver with NF~=~0\,dB adds nothing; one
+with NF~=~6\,dB puts out four times the noise power a perfect receiver would. A lower NF means weaker signals
+can still be heard above the noise.
+
+\textbf{Which noise figure?} The mixer converts noise from \emph{both} RF frequencies that land on the same IF ---
+the desired one and its image (see Section~\ref{sec:rx-image-rejection}). The NF in this section counts all of the
+noise that reaches the IF output against the gain of the desired signal alone. That is the \emph{single-sideband}
+(SSB) noise figure, the one that applies when receiving an ordinary signal that occupies only one side of the
+LO.\footnote{Some datasheets quote a \emph{double-sideband} (DSB) NF instead, which credits the receiver for the
+gain at both sidebands and therefore comes out up to 3\,dB lower. The SSB figure is the honest one for this unit's
+normal use.}
+
+\textbf{From noise figure to sensitivity.} \emph{Sensitivity} is the weakest signal the receiver can use,
+and it follows directly from the NF:
+\begin{center}
+Sensitivity (dBm) = −174 + NF + 10·log\textsubscript{10}(bandwidth in Hz) + required SNR (dB)
+\end{center}
+The first three terms are the receiver's noise floor, referred to its input, over the signal's bandwidth;
+the last is how far above that noise floor the signal has to be for the demodulator to work, which depends on
+the modulation and coding, not on this unit. Every dB of NF is therefore a dB of sensitivity.
+
+\textbf{How it's measured.} The unit's NF is found from two separate measurements at exactly the same
+settings (same FR1, FR3, LO, and filter), both read at the ``RX-side FR1 IF Out'' connector:\footnote{This is the
+``gain method''. It needs no calibrated noise source --- only a spectrum analyzer that is much quieter than
+the unit's own output noise. Here the analyzer's own noise floor sat at least \nfMinMargin\,dB below the unit's
+output noise at every point; it was measured separately and subtracted from every reading.}
+\begin{enumerate}
+  \item \textbf{Output noise.} With the RF input terminated in 50\,$\Omega$, measure the noise density at the IF
+        output, in dBm/Hz.
+  \item \textbf{Gain.} Feed in a weak CW tone of known power (−50\,dBm, well below the point where the chain
+        starts to compress) and measure the IF output tone, to get the conversion gain.
+\end{enumerate}
+Both readings are referred to the unit's connectors: the losses of the cables between the unit and the analyzer
+are removed from the output noise as well as from the gain. Then NF = (output noise) − (gain) + 174, all in dB. For example, an output noise of −120\,dBm/Hz with
+45\,dB of gain gives NF = −120 − 45 + 174 = 9\,dB. The input tone power was itself measured, at every FR3
+frequency, through the same cable used to feed the unit, rather than trusting the signal generator's
+nominal setting.\footnote{The generator was within a few tenths of a dB of nominal across 6--26.5\,GHz,
+with a few narrow dips of up to 0.7\,dB; the measured value is used throughout.} All readings use 100
+power-domain averages.
+
+\textbf{What's plotted.} NF was measured at \nfCount{} (FR1, FR3) combinations: FR1 from 1 to 4\,GHz and FR3
+from 6 to 26.5\,GHz, both in 0.5\,GHz steps, for both low-side and high-side LO, wherever the LO falls between
+7 and 22.5\,GHz, with the ``optimal'' filter engaged at every point. Grey cells
+are combinations that would need the LO outside that range. In the heatmaps, \emph{darker is better} (lower NF),
+the same ``darker is better'' sense as the gain figures, and both heatmaps share one colour scale so they can be
+compared by eye. FR3 values above the unit's rated 24\,GHz maximum are measured and shown too, inside a red ``out of
+design spec'' box. Because NF is a CW measurement, read at a single IF frequency, FR1 = 4\,GHz lies inside the
+0.7--4.0\,GHz IF spec (unlike the conversion-gain figures, whose 500\,MHz windows run past it).
+
+\textbf{A note about the 10\,MHz clock comb.} The noise is read 200\,kHz away from each IF frequency, not exactly on
+it. The unit's 10\,MHz reference clock leaks a weak comb of spurious tones into the IF output, strongest at
+multiples of 20\,MHz (with weaker ones at the odd multiples of 10\,MHz); it comes from the reference clock buffer,
+and it sits a few dB to about 12\,dB above the noise floor at the strongest lines.
+Reading 200\,kHz away keeps it out of the measurement. In use, it matters only when receiving an extremely weak CW
+signal placed exactly on a multiple of 10\,MHz at the IF, where a comb line can sit on top of it; if that happens,
+move the IF (or the LO) by a few hundred kHz. For a wideband signal it hardly matters: a 100\,MHz OFDM signal with
+1024 subcarriers has only about ten subcarriers on comb lines, which together raise the total in-band noise by well
+under 0.1\,dB.
+
+\subsection{Noise Figure: Optimal Filter Engaged}
+\label{sec:nf-optimal}
+
+The AM3153 filter is what gives the RX side its image rejection (Section~\ref{sec:rx-image-rejection}), but it sits
+after the LNA, so its insertion loss also adds to the noise figure. Here it is engaged at every point in its ``optimal''
+setting, the same per-point choice used throughout this datasheet (Section~\ref{sec:sideband-suppression}).
+
+\textbf{With the filter bypassed, the noise figure is lower.} Nothing then sits between the LNA and the mixer, so the
+filter's loss no longer adds to the noise. The price is image rejection: a signal at the image frequency then reaches
+the IF output almost unattenuated (Section~\ref{sec:rx-image-rejection}). Since most users engage the filter for its
+image rejection, only the optimal-filter setting is characterized here. If your incoming FR3 signal is very weak and
+nothing is transmitting at its image, bypassing the filter will lower the noise figure.
+
+\textbf{Measurement conditions.} \lmxDriveRule{} (set from the LO frequency). Because the LO is shared, the TX side
+was set up exactly as in normal use (its stored LO-leakage calibration applied and its optimal filter engaged), with
+both TX-side ports terminated in 50\,\textohm. The unit was measured hot: no fan, LMX2820 die at
+\condRxNfMinC--\condRxNfMaxC\textdegree C.
+
+\textbf{Results.} Across all points up to the rated 24\,GHz, the median NF is \nfMedian\,dB. Over that same
+range, with low-side LO the NF runs from \nfLowMin{} to \nfLowMax\,dB (median \nfLowMedian\,dB, and 90\% of
+points at or below \nfLowPninety\,dB); with high-side LO it runs from \nfHighMin{} to \nfHighMax\,dB (median
+\nfHighMedian\,dB, 90\% at or below \nfHighPninety\,dB) (Figures~\ref{fig:12-1}--\ref{fig:12-4}).
+Above the rated 24\,GHz the unit still works, just out of design spec: the \nfOosCount{} points measured there (all
+with low-side LO, boxed in red in Figure~\ref{fig:12-1}; the histograms count only the points within the design spec)
+have an NF from \nfOosMin{} to \nfOosMax\,dB (median \nfOosMedian\,dB).
+
+\textbf{Sensitivity.} At the median NF of \nfMedian\,dB, the input-referred noise floor (required SNR = 0\,dB) is:
+\par\medskip\noindent\begin{minipage}{\linewidth}% caption and table stay on one page
+\begin{center}
+\captionof{table}{Input-referred noise floor at the median NF, optimal filter engaged.}\label{tab:nf-floor-optimal}
+\vspace{0.4em}
+\begin{tabular}{lc}
+\toprule
+Signal bandwidth & Noise floor at the RF input \\
+\midrule
+CW tone\textsuperscript{*} & \sensCW\,dBm/Hz \\
+1\,MHz & \sensOneM\,dBm \\
+5\,MHz & \sensFiveM\,dBm \\
+10\,MHz & \sensTenM\,dBm \\
+50\,MHz & \sensFiftyM\,dBm \\
+100\,MHz & \sensHundredM\,dBm \\
+500\,MHz & \sensFiveHundredM\,dBm \\
+\bottomrule
+\multicolumn{2}{l}{\footnotesize\textsuperscript{*}Per 1\,Hz of detection bandwidth (see below).}
+\end{tabular}
+\end{center}
+\end{minipage}\par
+Add the required SNR to get the sensitivity. For example, a signal needing 10\,dB of SNR in 100\,MHz has a
+sensitivity 10\,dB above the 100\,MHz noise floor in the table. A CW tone has no bandwidth of its own, so its
+noise floor depends on the bandwidth it is detected in: add 10·log\textsubscript{10} of that bandwidth in Hz to the CW row, e.g.\ +40\,dB for 10\,kHz.
+
+\textbf{Where the NF is worst, and how to avoid it.} The clearest feature in both heatmaps is a stripe of
+higher NF wherever the LO sits at 14.0 or 14.5\,GHz: there the median NF is about \nfStripeLow\,dB (low-side LO)
+and \nfStripeHigh\,dB (high-side LO) worse than with the LO at the neighbouring 13--13.5 and 15--15.5\,GHz, at every
+FR1. Because it follows the LO frequency rather than the RF frequency, it shows up as a diagonal stripe in the
+low-side heatmap (FR3 = LO + FR1) and as the mirror diagonal in the high-side one (FR3 = LO − FR1). If your FR3 and
+FR1 put the LO at 14 to 14.5\,GHz, switching to the other LO side moves the LO by twice the FR1 frequency, well
+clear of that stripe, usually for a much better NF. None of this matters unless the incoming FR3 signal is weak
+enough to sit close to the receiver's noise floor: a stronger signal stays far above the added noise either way.
+
+\medskip
+\figpair{images/sec12_fig1.pdf}{Noise figure, low-side LO: full measured (FR1, FR3) grid, optimal filter.
+Zoom in to read each cell's exact values, printed as (FR1, FR3, noise figure), with FR1 and FR3 in GHz and the
+noise figure in dB.}{fig:12-1}%
+        {images/sec12_fig2.pdf}{LO: Low-side. Filter: Optimal. Distribution of Figure~\ref{fig:12-1}, points within the design spec.}{fig:12-2}
+\figpair{images/sec12_fig3.pdf}{Noise figure, high-side LO: full measured (FR1, FR3) grid, optimal filter.
+Zoom in to read each cell's exact values, printed as (FR1, FR3, noise figure), with FR1 and FR3 in GHz and the
+noise figure in dB.}{fig:12-3}%
+        {images/sec12_fig4.pdf}{LO: High-side. Filter: Optimal. Distribution of Figure~\ref{fig:12-3}, points within the design spec.}{fig:12-4}
+\clearpage
+\flushbottom

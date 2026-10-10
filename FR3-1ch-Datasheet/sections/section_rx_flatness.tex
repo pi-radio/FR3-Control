@@ -1,0 +1,82 @@
+\clearpage
+\section{RX-side Gain Flatness}
+\label{sec:rx-flatness}
+\raggedbottom% no stretched gaps between text and figures (as in the NF section)
+
+\textbf{What is gain flatness?} Exactly as on the TX side (Section~\ref{sec:tx-flatness}): how much the conversion
+gain varies \emph{within} a 500\,MHz window, rather than its average (Sections~\ref{sec:rx-gain-lowside} and
+\ref{sec:rx-gain-highside}). A received wideband signal that passes through an uneven channel comes out of the unit
+with a tilted or rippled spectrum.
+
+\textbf{How it's measured.} The same way as on the TX side, with the roles of the ports swapped: at every (FR1, FR3)
+point, the FieldFox's tracking generator sweeps the FR3 window into the ``RX-side FR3 RF In'' port, while its
+receiver follows the 500\,MHz window centred on FR1 at the ``RX-side FR1 IF Out'' port, in 101 steps 5\,MHz apart.
+The input level is −50\,dBm, the same as in the RX conversion-gain sections, low enough to keep the highest-gain
+points clear of compression, which would flatten the measured ripple. The signal level arriving at the
+unit was again measured directly, by connecting the FieldFox's source to its own receiver through the same input
+cable, and the output cable's loss is removed from its own calibration. Each window is measured with the AM3153
+filter bypassed and with the ``optimal'' filter, never changing the filter during a sweep, over the same grid as on
+the TX side, for both low-side and high-side LO. The number reported is the RMS flatness defined in
+Section~\ref{sec:tx-flatness}: 0\,dB is perfectly flat, and in this data the peak-to-peak spread in a window is
+typically about \flatRxPpRatio{} times the RMS flatness (between \flatRxPpRatioLow{} and \flatRxPpRatioHigh{} times
+at 80\% of the points).
+
+\textbf{Measurement conditions.} \lmxDriveRule{} (set from the LO frequency). Because the LO is shared, the TX side was set up at every point exactly as in normal use (its stored LO-leakage calibration applied and its optimal filter engaged), with both TX-side ports terminated in 50\,\textohm. The unit was measured hot, as on the TX side: no fan, LMX2820 die at \condRxFlatMinC--\condRxFlatMaxC\textdegree C.
+
+\textbf{Results.} Within the design spec (FR3~$\le$~24\,GHz, and FR1 centre~$\le$~3.5\,GHz):
+\par\medskip\noindent\begin{minipage}{\linewidth}% caption and table stay on one page
+\begin{center}
+\captionof{table}{RX-side RMS gain flatness within the design spec, by LO side and filter setting.}\label{tab:rxflat-results}
+\vspace{0.4em}
+\begin{tabular}{lcccc}
+\toprule
+ & Median & 90\% of points at or below & Best & Worst \\
+\midrule
+Low-side LO, filter bypassed & \flatRxLowBypassMedian\,dB & \flatRxLowBypassPninety\,dB & \flatRxLowBypassMin\,dB & \flatRxLowBypassMax\,dB \\
+Low-side LO, optimal filter & \flatRxLowOptimalMedian\,dB & \flatRxLowOptimalPninety\,dB & \flatRxLowOptimalMin\,dB & \flatRxLowOptimalMax\,dB \\
+High-side LO, filter bypassed & \flatRxHighBypassMedian\,dB & \flatRxHighBypassPninety\,dB & \flatRxHighBypassMin\,dB & \flatRxHighBypassMax\,dB \\
+High-side LO, optimal filter & \flatRxHighOptimalMedian\,dB & \flatRxHighOptimalPninety\,dB & \flatRxHighOptimalMin\,dB & \flatRxHighOptimalMax\,dB \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{minipage}\par
+
+\textbf{Where it's flattest, and how to use that.} The median per FR1 centre (all FR3 up to 24\,GHz):
+\par\medskip\noindent\begin{minipage}{\linewidth}% caption and table stay on one page
+\begin{center}
+\captionof{table}{RX-side median RMS gain flatness for each FR1 centre (all FR3 up to 24\,GHz).}\label{tab:rxflat-by-fr1}
+\vspace{0.4em}
+\footnotesize
+\input{sections/flatness_rx_by_fr1}
+\end{center}
+\end{minipage}\par
+The RX side is flatter than the TX side (Section~\ref{sec:tx-flatness}): its median RMS flatness is about 1\,dB
+or less in every configuration. As on the TX side, it depends mostly on where the signal sits in FR1, and much less on
+FR3 or on the LO side. Windows centred at FR1 = 2.5--3.0\,GHz are the flattest, closely followed by 1.0\,GHz, while
+windows centred at 1.5\,GHz are the least flat, followed by 3.5\,GHz. So when flatness matters and you are free to
+choose the IF, centre the signal near 2.5--3.0\,GHz in FR1 and avoid 1.5\,GHz. Engaging the optimal filter changes
+the flatness only a little: its median is slightly lower than with the filter bypassed, for both LO sides.
+
+\textbf{What's plotted.} As on the TX side: for each LO side and filter setting, a heatmap of the RMS flatness over
+the full measured (FR1, FR3) grid, on the shared 0--4\,dB colour scale (darker = flatter), with points above 24\,GHz
+and the FR1 = 4.0\,GHz column boxed in red as out of design spec; and a histogram of the points within the design spec.
+
+\figpair{images/flat_rx_low_bypass_map.pdf}{RMS gain flatness, low-side LO: full measured (FR1, FR3) grid, filter
+bypassed. Zoom in to read each cell's exact values, printed as (FR1, FR3, RMS flatness), with FR1 and FR3 in GHz and
+the RMS flatness in dB.}{fig:rxflat-1}%
+        {images/flat_rx_low_bypass_hist.pdf}{LO: Low-side. Filter: Bypassed. Distribution of
+Figure~\ref{fig:rxflat-1}, points within the design spec.}{fig:rxflat-2}
+\figpair{images/flat_rx_low_optimal_map.pdf}{RMS gain flatness, low-side LO: full measured (FR1, FR3) grid,
+``optimal'' filter engaged at every point.}{fig:rxflat-3}%
+        {images/flat_rx_low_optimal_hist.pdf}{LO: Low-side. Filter: Optimal. Distribution of
+Figure~\ref{fig:rxflat-3}, points within the design spec.}{fig:rxflat-4}
+\clearpage
+\figpair{images/flat_rx_high_bypass_map.pdf}{RMS gain flatness, high-side LO: full measured (FR1, FR3) grid, filter
+bypassed.}{fig:rxflat-5}%
+        {images/flat_rx_high_bypass_hist.pdf}{LO: High-side. Filter: Bypassed. Distribution of
+Figure~\ref{fig:rxflat-5}, points within the design spec.}{fig:rxflat-6}
+\figpair{images/flat_rx_high_optimal_map.pdf}{RMS gain flatness, high-side LO: full measured (FR1, FR3) grid,
+``optimal'' filter engaged at every point.}{fig:rxflat-7}%
+        {images/flat_rx_high_optimal_hist.pdf}{LO: High-side. Filter: Optimal. Distribution of
+Figure~\ref{fig:rxflat-7}, points within the design spec.}{fig:rxflat-8}
+\flushbottom

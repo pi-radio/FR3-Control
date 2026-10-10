@@ -1,0 +1,98 @@
+\clearpage
+\section{Key Specifications}
+\label{sec:summary}
+\input{sections/sec_spur_numbers}% the 2xLO spur row and note quote these (the spur section itself comes later)
+\input{sections/sec_rx_conditions}%
+\input{sections/sec_image_numbers}%
+\input{sections/sec_tx_conditions}% drive rule, test temperatures, \attn
+\input{sections/sec_sideband_numbers}
+\input{sections/sec_2lo_numbers}% the 2xLO row (all filter settings)
+\input{sections/sec6_cal_numbers}% the LO section's numbers (also quoted in the notes below)
+\raggedbottom% tables follow each other without stretched gaps
+\newlength{\summarywidth}\setlength{\summarywidth}{0.84\linewidth}% all five tables share this width
+
+The headline numbers of this datasheet in one place, for the Pi-Radio FR3-1ch unit: a circuit board (PCB revision
+1.4) enclosed in a CNC-milled aluminum case, measured on Unit~\#5. Every
+measured value below is taken from the section given in the last column, where it is explained in full.
+
+\par\medskip\noindent\begin{minipage}{\linewidth}% caption and table stay on one page
+\begin{center}
+\captionof{table}{General.}\label{tab:summary-general}
+\vspace{0.4em}
+\footnotesize
+\begin{tabularx}{\summarywidth}{|l|X|}
+\hline
+FR3 (RF) frequency range & 6--24\,GHz \\
+FR1 (IF) frequency range & 0.7--4.0\,GHz \\
+Instantaneous bandwidth & Up to 500\,MHz \\
+LO (internal LMX2820) & 7--22.6\,GHz\textsuperscript{*}; or an external LO via the ``LO In'' connector \\
+Reference & Internal 10\,MHz TCXO; or an external reference via the ``REFCLK In'' connector \\
+Power & 7.5\,W from 5\,V over USB-C (supply must source 1.5\,A) \\
+Control & USB-C virtual serial port, plain ASCII commands; Pi-Radio GUI \\
+Intended environment & Designed for in-lab use \\
+\hline
+\end{tabularx}
+\par\vspace{0.2em}{\scriptsize\textsuperscript{*}The LO can work as low as 6\,GHz, with minor performance degradation.\par}
+\end{center}
+\end{minipage}\par
+
+\par\medskip\noindent\begin{minipage}{\linewidth}% caption and table stay on one page
+\begin{center}
+\captionof{table}{Absolute maximum ratings and port requirements.}\label{tab:summary-absmax}
+\vspace{0.4em}
+\footnotesize
+\begin{tabularx}{\summarywidth}{|l|X|}
+\hline
+``RX-side FR3 RF In'' connector & $-$5\,dBm maximum input \\
+``TX-side FR1 IF In'' connector & 0\,dBm maximum input \\
+``REFCLK In'' connector & 10\,MHz, 3.3\,V CMOS clock \\
+``LO In'' connector & CW sine wave, +5\,dBm, 6--22.6\,GHz \\
+LMX2820 die temperature & Below 100\,\textdegree C for correct operation; beyond this limit, operation is unsafe and
+not characterized. Read it in the GUI, or with the \texttt{LMX TEMP?} command. \\
+ESD & \textbf{Static-sensitive device.} Some parts inside the unit can be damaged by a static discharge of under 150\,V,
+far less than a person can carry without feeling it. Ground yourself, and touch each cable's outer shell to ground,
+before connecting anything to any connector. \\
+\hline
+\end{tabularx}
+\end{center}
+\end{minipage}\par
+
+\par\medskip\noindent\begin{minipage}{\linewidth}% caption and table stay on one page
+\begin{center}
+\captionof{table}{Transmit (FR1 $\rightarrow$ FR3). Measured across all (FR1, FR3) combinations unless noted.}\label{tab:summary-tx}
+\vspace{0.4em}
+\footnotesize
+\input{sections/sec0_summary_tx}
+\end{center}
+\end{minipage}\par
+
+\par\medskip\noindent\begin{minipage}{\linewidth}% caption and table stay on one page
+\begin{center}
+\captionof{table}{Receive (FR3 $\rightarrow$ FR1). Measured across all (FR1, FR3) combinations unless noted.}\label{tab:summary-rx}
+\vspace{0.4em}
+\footnotesize
+\input{sections/sec0_summary_rx}
+\end{center}
+\end{minipage}\par
+
+\par\medskip\noindent\begin{minipage}{\linewidth}% caption and table stay on one page
+\begin{center}
+\captionof{table}{LO and phase noise.}\label{tab:summary-lo}
+\vspace{0.4em}
+\footnotesize
+\input{sections/sec0_summary_lo}
+\end{center}
+\end{minipage}\par
+
+\noindent{\footnotesize\textbf{Notes:} \textbf{Typ} is the median over every measured point within the design spec
+(FR3~$\le$~24\,GHz; for conversion gain and gain flatness, whose 500\,MHz window at FR1~=~4\,GHz runs past the IF spec, also FR1
+centre~$\le$~3.5\,GHz), and \textbf{Min}/\textbf{Max} are the extremes over the same points;
+points outside the design spec are shown in the sections but left out here. All TX values were measured with the unit hot (no fan, LMX2820 die at about \condGainMinC--\condCompMaxC\textdegree C), as the worst case, with \lmxDriveRule. Conversion gain is the average over a
+500\,MHz window at each point, measured at a $-$40\,dBm input. Gain flatness is the RMS deviation of the gain across that same 500\,MHz window. P1dB is measured at the representative test points of
+Sections~\ref{sec:compression-upper}, \ref{sec:compression-lower}, \ref{sec:rx-compression-lowside}, and \ref{sec:rx-compression-highside} only. Noise figure is given with the AM3153 filter bypassed and with the ``optimal'' filter engaged
+(Section~\ref{sec:rx-noise-figure}).
+\par\noindent\raisebox{0.55ex}{\scriptsize a}\,10th percentile: 90\% of measured points are at or above this value (TX: computed from the measured points; RX: read from the distribution figure, to within about 1\,dB).
+\par\noindent\raisebox{0.55ex}{\scriptsize b}\,Median, and worst, LO leakage at the ``TX-side FR3 RF Out'' connector with the stored calibration applied, over every filter setting usable at each of the \calLoCount{} calibrated LO frequencies (7.0--22.5\,GHz in 100\,MHz steps), excluding the setting the null was found in; the full sweep and its distribution are in Section~\ref{sec:lo-suppression}.
+\par\noindent\raisebox{0.55ex}{\scriptsize c}\,Median, and worst, 2×LO power at the ``TX-side FR3 RF Out'' connector over all \twoLoReadCount{} readings: at each of \twoLoLoCount{} LO frequencies (\twoLoLoMin--\twoLoLoMax\,GHz in 100\,MHz steps), the LO leakage was nulled with the reference filter and the 2×LO was then read in every filter setting usable at that LO, with no input signal. The worst reading is at LO~=~\twoLoMaxLo\,GHz with filter \twoLoMaxFilter; \twoLoAboveTwenty{} of the \twoLoReadCount{} readings are above $-$20\,dBm. Above LO~=~13.25\,GHz the spur lies above 26.5\,GHz and was not measured (Section~\ref{sec:spur-tx-2lo}).
+\par\noindent\raisebox{0.55ex}{\scriptsize d}\,Power leaking out of the ``RX-side FR3 RF In'' connector (radiated if an antenna is connected), with the TX side in normal use; 2×LO above \spurTwoLoLimit\,GHz not measured (Section~\ref{sec:spur-rx-lo}). \par}% \par inside the group: line spacing follows \footnotesize
+\flushbottom

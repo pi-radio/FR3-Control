@@ -1,0 +1,4 @@
+lo_ghz,two_lo_ghz,tx_filter,rx_filter,i_v,q_v,lmx_power,lo_dbm,lo_floor_dbm,two_lo_dbm,two_lo_floor_dbm,lo_dbm_tx_offset,two_lo_dbm_tx_offset,lmx_temp_c
+8.0,16.0,0x3E,0x3E,0.01995,0.06130,0,-73.45,-103.06,-80.32,-98.37,-73.46,-79.28,62.7
+16.0,32.0,0x24,0x24,-0.04170,0.03834,2,-59.12,-97.98,,,-59.15,,65.3
+20.0,40.0,0x2D,0x2D,-0.01324,-0.00225,4,-64.9,-97.09,,,-64.75,,66.1

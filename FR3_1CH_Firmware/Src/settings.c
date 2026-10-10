@@ -4,10 +4,15 @@
 #include "lmx2820.h"
 #include "ltc2668.h"
 #include "rf_filter.h"
+#include "lo_control.h"
+#include "power_sequence.h"
 #include <string.h>
 
 #define SETTINGS_MAGIC    0x53455454UL  /* 'S','E','T','T' */
-#define SETTINGS_VERSION  1U
+/* 2 = firmware 1.4.1 (adds the LMX drive / LO-null bias AUTO modes). A unit flashed from 1.00 finds
+ * version 1, keeps the drivers' defaults (board serial 0) and needs SET BOARD SERIAL again - by
+ * design, no migration (user, 2026-10-10). */
+#define SETTINGS_VERSION  2U
 
 /* Reserve 1 EDATA sector (6KB) - far more than this <100-byte settings
  * blob needs. EDATA sectors are numbered starting at 120 from the bottom
@@ -78,9 +83,18 @@ typedef struct
   uint8_t  tx_filter;
   uint8_t  rx_filter;
 #endif
+
+#if BOARD_HAS_LO_CONTROL
+  uint8_t  lmx_power_auto;
+  uint8_t  iq_bias_auto;
+#endif
 } Settings_t;
 
 static uint32_t settings_board_serial = 0U;
+
+/* RAM only, deliberately not part of Settings_t: every reset comes up with
+ * persistence enabled - see Settings_SetPersist() in settings.h. */
+static bool settings_persist_enabled = true;
 
 uint32_t Settings_GetBoardSerial(void)
 {
@@ -211,10 +225,10 @@ void Settings_Init(void)
   if (!Settings_IsEdataInitialized())
   {
     /* First-ever access: EDATA is erased but never programmed, not yet
-       safe to read - see SETTINGS_INIT_MARKER_SECTOR above. Settings_Save()
+       safe to read - see SETTINGS_INIT_MARKER_SECTOR above. Settings_SaveNow()
        does the required erase-then-program cycle (saving current driver
        defaults), making it safe to read from now on. */
-    Settings_Save();
+    Settings_SaveNow();
     Settings_MarkEdataInitialized();
   }
 
@@ -256,8 +270,22 @@ void Settings_Init(void)
      uninitialized, only for the tune to immediately power it back up -
      undoing the restored mute. No explicit unmute call needed since the
      tune already leaves it unmuted. */
+#if BOARD_HAS_LO_CONTROL
+  /* Drive rule (AUTO): the power for the restored frequency, not the stored value. */
+  LoControl_SetPowerAuto(settings.lmx_power_auto != 0U);
+  if (LoControl_GetPowerAuto())
+  {
+    LoControl_ApplyDriveFor(settings.lmx_freq_hz);
+  }
+  LMX2820_Tune(settings.lmx_freq_hz);
+  if (!LoControl_GetPowerAuto())
+  {
+    LMX2820_SetPower(settings.lmx_power);
+  }
+#else
   LMX2820_Tune(settings.lmx_freq_hz);
   LMX2820_SetPower(settings.lmx_power);
+#endif
   if (settings.lmx_mute != 0U)
   {
     LMX2820_SetMute(true);
@@ -272,6 +300,13 @@ void Settings_Init(void)
 #if BOARD_HAS_LO_SWITCH
   HAL_GPIO_WritePin(LO_CTRL_3V3_GPIO_Port, LO_CTRL_3V3_Pin,
                      (settings.lo_internal != 0U) ? GPIO_PIN_RESET : GPIO_PIN_SET);
+#if BOARD_HAS_LO_CONTROL
+  /* External LO: the internal TCXO is not needed - switched off (as "SET LO EXT" does). */
+  if (settings.lo_internal == 0U)
+  {
+    PowerSequence_SetTcxo(false);
+  }
+#endif
 #endif
 
 #if BOARD_HAS_IQ_SWAP
@@ -283,9 +318,39 @@ void Settings_Init(void)
   RFFilter_SetTx(settings.tx_filter);
   RFFilter_SetRx(settings.rx_filter);
 #endif
+
+#if BOARD_HAS_LO_CONTROL
+  /* Auto bias last: it needs the restored LO switch / mute state. Otherwise the restored I/Q stay. */
+  LoControl_SetBiasAuto(settings.iq_bias_auto != 0U);
+  (void)LoControl_ApplyBiasNow();
+#endif
 }
 
 void Settings_Save(void)
+{
+  if (settings_persist_enabled)
+  {
+    Settings_SaveNow();
+  }
+}
+
+void Settings_SetPersist(bool enable)
+{
+  settings_persist_enabled = enable;
+  if (enable)
+  {
+    /* Re-establish the invariant "persistence ON => flash mirrors live
+       state" - changes made while it was OFF were never written. */
+    Settings_SaveNow();
+  }
+}
+
+bool Settings_GetPersist(void)
+{
+  return settings_persist_enabled;
+}
+
+void Settings_SaveNow(void)
 {
   Settings_t settings = {0};
 
@@ -320,6 +385,11 @@ void Settings_Save(void)
 #if BOARD_HAS_RF_FILTERS
   settings.tx_filter = RFFilter_GetTx();
   settings.rx_filter = RFFilter_GetRx();
+#endif
+
+#if BOARD_HAS_LO_CONTROL
+  settings.lmx_power_auto = LoControl_GetPowerAuto() ? 1U : 0U;
+  settings.iq_bias_auto = LoControl_GetBiasAuto() ? 1U : 0U;
 #endif
 
   HAL_FLASH_Unlock();

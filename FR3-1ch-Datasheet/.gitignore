@@ -1,0 +1,12 @@
+# LaTeX build output (rebuild with xelatex main.tex, twice)
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+# The built PDF: too large to version on every revision; attach it to a GitHub release instead
+main.pdf
+# Layout-check renders
+_check*.png
